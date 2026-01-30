@@ -5,7 +5,7 @@
 
 class RISCV {
 public:
-    static constexpr uint32_t RAM_SIZE = 16 * 1024 * 1024; // 256 MB
+    static constexpr uint32_t RAM_SIZE = 16 * 1024 * 1024; // 16 MB
 
     RISCV();
     explicit RISCV(uint32_t ram_size);
