@@ -8,6 +8,13 @@
 
 class SimpleEnvironment : public Environment {
 public:
+    virtual void on_trap(RISCV &cpu, uint32_t cause)
+    {
+        if(cause == 11) // ECALL
+            ecall(cpu);
+        else if(cause == 3) // EBREAK
+            ebreak(cpu);
+    }
     void ecall(RISCV &cpu) override
     {
         uint32_t syscall = cpu.get_reg(17); // a7

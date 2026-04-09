@@ -4,21 +4,31 @@
 SRC_DIR = src
 BUILD_DIR = build
 BIN_DIR = bin
-PROGRAMS_DIR = programs/c
-ASM_DIR = programs/assembly
+PROGRAMS_DIR = programs
+USER_C_DIR = $(PROGRAMS_DIR)/user/c
+USER_ASM_DIR = $(PROGRAMS_DIR)/user/assembly
+FIRMWARE_DIR = $(PROGRAMS_DIR)/firmware
 INCLUDE_DIR = include
-# Runtime C files inside include (not recommended structure, but works)
+
+# Memory addresses
+FIRMWARE_BASE = 0x0000
+USER_PROGRAM_BASE = 0x2000
+
+# RISC-V architecture flags (include zicsr extension for CSR instructions)
+RISCV_ARCH = rv32im_zicsr
+RISCV_ABI = ilp32
+
+# Runtime C files inside include
 INCLUDE_C_SRCS = $(wildcard $(INCLUDE_DIR)/*.c)
 INCLUDE_C_OBJS = $(patsubst $(INCLUDE_DIR)/%.c,$(BUILD_DIR)/include_%.o,$(INCLUDE_C_SRCS))
-
 
 # Compiler and tools
 CXX = g++
 CXXFLAGS = -std=c++11 -I$(SRC_DIR) -I$(INCLUDE_DIR) -Wall -Wextra
-RISCV_CC = riscv64-unknown-elf-gcc
-RISCV_AS = riscv64-unknown-elf-as
-RISCV_LD = riscv64-unknown-elf-ld
-RISCV_OBJCOPY = riscv64-unknown-elf-objcopy
+RISCV_CC = riscv64-elf-gcc
+RISCV_AS = riscv64-elf-as
+RISCV_LD = riscv64-elf-ld
+RISCV_OBJCOPY = riscv64-elf-objcopy
 
 # Source files
 SRCS = $(SRC_DIR)/main.cpp \
@@ -34,29 +44,23 @@ TARGET = $(BIN_DIR)/rvemu
 STARTUP_SRC = startup/crt0.s
 STARTUP_OBJ = $(BUILD_DIR)/crt0.o
 
-# Find all assembly test files
-ASM_TESTS = $(wildcard $(ASM_DIR)/*.s)
-ASM_BINS = $(patsubst $(ASM_DIR)/%.s,$(BIN_DIR)/%.bin,$(ASM_TESTS))
+# Find all assembly test files (user assembly)
+ASM_TESTS = $(wildcard $(USER_ASM_DIR)/*.s)
+ASM_BINS = $(patsubst $(USER_ASM_DIR)/%.s,$(BIN_DIR)/%.bin,$(ASM_TESTS))
 
-# Find all C test files
+# Find all C program files (user C)
+C_PROGRAMS = $(wildcard $(USER_C_DIR)/*.c)
+C_BINS = $(patsubst $(USER_C_DIR)/%.c,$(BIN_DIR)/%.bin,$(C_PROGRAMS))
 
-
-
-# Find all program files
-PROGRAMS = $(wildcard $(PROGRAMS_DIR)/*.c)
-PROGRAM_BINS = $(patsubst $(PROGRAMS_DIR)/%.c,$(BIN_DIR)/%.bin,$(PROGRAMS))
+# Find firmware files
+FIRMWARE_FILES = $(wildcard $(FIRMWARE_DIR)/*.s)
+FIRMWARE_BINS = $(patsubst $(FIRMWARE_DIR)/%.s,$(BIN_DIR)/firmware_%.bin,$(FIRMWARE_FILES))
 
 # All binaries to build
-ALL_BINS = $(ASM_BINS) $(C_BINS) $(PROGRAM_BINS)
-
-# Get list of program names
-ASM_NAMES = $(notdir $(basename $(ASM_TESTS)))
-C_NAMES = $(notdir $(basename $(C_TESTS)))
-PROGRAM_NAMES = $(notdir $(basename $(PROGRAMS)))
-ALL_NAMES = $(ASM_NAMES) $(C_NAMES) $(PROGRAM_NAMES)
+ALL_BINS = $(FIRMWARE_BINS) $(ASM_BINS) $(C_BINS)
 
 # Default target
-all: $(TARGET) $(STARTUP_SRC)
+all: $(TARGET) $(ALL_BINS)
 
 $(TARGET): $(OBJS)
 	@mkdir -p $(BIN_DIR)
@@ -71,31 +75,40 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 .PHONY: tests
 tests: $(ALL_BINS)
 
-# Build assembly test
-$(BIN_DIR)/%.bin: $(ASM_DIR)/%.s
-	@echo "Building assembly: $*"
+# Build firmware programs (start at 0x0000) with zicsr extension
+$(BIN_DIR)/firmware_%.bin: $(FIRMWARE_DIR)/%.s
+	@echo "Building firmware: $* (base address: $(FIRMWARE_BASE))"
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
-	$(RISCV_AS) -march=rv32im -mabi=ilp32 -o $(BUILD_DIR)/$*.o $<
-	$(RISCV_LD) -m elf32lriscv -Ttext=0x0 -o $(BUILD_DIR)/$*.elf $(BUILD_DIR)/$*.o
+	$(RISCV_AS) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -o $(BUILD_DIR)/firmware_$*.o $<
+	$(RISCV_LD) -m elf32lriscv -Ttext=$(FIRMWARE_BASE) -o $(BUILD_DIR)/firmware_$*.elf $(BUILD_DIR)/firmware_$*.o
+	$(RISCV_OBJCOPY) -O binary $(BUILD_DIR)/firmware_$*.elf $@
+
+# Build user assembly programs (start at 0x2000) with zicsr extension
+$(BIN_DIR)/%.bin: $(USER_ASM_DIR)/%.s
+	@echo "Building user assembly: $* (base address: $(USER_PROGRAM_BASE))"
+	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
+	$(RISCV_AS) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -o $(BUILD_DIR)/$*.o $<
+	$(RISCV_LD) -m elf32lriscv -Ttext=$(USER_PROGRAM_BASE) -o $(BUILD_DIR)/$*.elf $(BUILD_DIR)/$*.o
 	$(RISCV_OBJCOPY) -O binary $(BUILD_DIR)/$*.elf $@
+
 # Compile include/*.c runtime files
 $(BUILD_DIR)/include_%.o: $(INCLUDE_DIR)/%.c
 	@mkdir -p $(BUILD_DIR)
-	$(RISCV_CC) -march=rv32im -mabi=ilp32 -nostdlib -ffreestanding \
+	$(RISCV_CC) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -nostdlib -ffreestanding \
 		-c -o $@ $<
 
-
-$(BIN_DIR)/%.bin: $(PROGRAMS_DIR)/%.c $(STARTUP_SRC) $(INCLUDE_C_OBJS)
-	@echo "Building C program with startup: $*"
+# Build user C programs with startup (start at 0x2000)
+$(BIN_DIR)/%.bin: $(USER_C_DIR)/%.c $(STARTUP_SRC) $(INCLUDE_C_OBJS)
+	@echo "Building user C program: $* (base address: $(USER_PROGRAM_BASE))"
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
 
-	$(RISCV_CC) -march=rv32im -mabi=ilp32 -nostdlib -ffreestanding \
+	$(RISCV_CC) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -nostdlib -ffreestanding \
 		-c -o $(BUILD_DIR)/$*.c.o $<
 
-	$(RISCV_AS) -march=rv32im -mabi=ilp32 \
+	$(RISCV_AS) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) \
 		-o $(BUILD_DIR)/crt0.o $(STARTUP_SRC)
 
-	$(RISCV_LD) -m elf32lriscv -Ttext=0x0 \
+	$(RISCV_LD) -m elf32lriscv -Ttext=$(USER_PROGRAM_BASE) \
 		-o $(BUILD_DIR)/$*.elf \
 		$(BUILD_DIR)/crt0.o \
 		$(INCLUDE_C_OBJS) \
@@ -103,20 +116,16 @@ $(BIN_DIR)/%.bin: $(PROGRAMS_DIR)/%.c $(STARTUP_SRC) $(INCLUDE_C_OBJS)
 
 	$(RISCV_OBJCOPY) -O binary $(BUILD_DIR)/$*.elf $@
 
-
-# Alternative: Direct compilation without intermediate objects
-$(BIN_DIR)/%_direct.bin: $(PROGRAMS_DIR)/%.c $(STARTUP_SRC)
-	@echo "Building C program (direct): $*"
-	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
-	$(RISCV_CC) -march=rv32im -mabi=ilp32 -nostdlib -ffreestanding \
-		-Wl,-Ttext=0x0 -o $(BUILD_DIR)/$*.elf $(STARTUP_SRC) $<
-	$(RISCV_OBJCOPY) -O binary $(BUILD_DIR)/$*.elf $@
+# Clean
+.PHONY: clean
+clean:
+	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
 # Run all tests
 .PHONY: run
 run: $(TARGET) tests
 	@echo "========================================"
-	@echo "Running tests..."
+	@echo "Running all programs..."
 	@echo "========================================"
 	@for bin in $(ALL_BINS); do \
 		if [ -f "$$bin" ]; then \
@@ -142,30 +151,30 @@ run-menu: $(TARGET) tests
 	declare -a names; \
 	declare -a bins; \
 	\
-	@# Add assembly tests
+	@# Add firmware (runs at 0x0000)
+	for fw in $(FIRMWARE_FILES); do \
+		name=$$(basename $$fw .s); \
+		names[$$idx]="[FIRMWARE] $$name (0x0000)"; \
+		bins[$$idx]="$(BIN_DIR)/firmware_$$name.bin"; \
+		echo "  $$idx. [FIRMWARE] $$name - runs at 0x0000"; \
+		idx=$$((idx + 1)); \
+	done; \
+	\
+	@# Add user assembly tests (runs at 0x2000)
 	for test in $(ASM_TESTS); do \
 		name=$$(basename $$test .s); \
-		names[$$idx]="[ASM] $$name"; \
+		names[$$idx]="[USER-ASM] $$name (0x2000)"; \
 		bins[$$idx]="$(BIN_DIR)/$$name.bin"; \
-		echo "  $$idx. [ASM] $$name"; \
+		echo "  $$idx. [USER-ASM] $$name - runs at 0x2000"; \
 		idx=$$((idx + 1)); \
 	done; \
 	\
-	@# Add C tests
-	for test in $(C_TESTS); do \
-		name=$$(basename $$test .c); \
-		names[$$idx]="[C]   $$name"; \
-		bins[$$idx]="$(BIN_DIR)/$$name.bin"; \
-		echo "  $$idx. [C]   $$name"; \
-		idx=$$((idx + 1)); \
-	done; \
-	\
-	@# Add programs
-	for prog in $(PROGRAMS); do \
+	@# Add user C programs (runs at 0x2000)
+	for prog in $(C_PROGRAMS); do \
 		name=$$(basename $$prog .c); \
-		names[$$idx]="[PROG] $$name"; \
+		names[$$idx]="[USER-C] $$name (0x2000)"; \
 		bins[$$idx]="$(BIN_DIR)/$$name.bin"; \
-		echo "  $$idx. [PROG] $$name"; \
+		echo "  $$idx. [USER-C] $$name - runs at 0x2000"; \
 		idx=$$((idx + 1)); \
 	done; \
 	\
@@ -210,15 +219,15 @@ run-menu: $(TARGET) tests
 run-%: $(TARGET)
 	@if [ -f "$(BIN_DIR)/$*.bin" ]; then \
 		echo "========================================"; \
-		echo "Running: $*"; \
+		echo "Running user program: $* (at 0x2000)"; \
 		echo "========================================"; \
 		$(TARGET) $(BIN_DIR)/$*.bin; \
 		echo "========================================"; \
-	elif [ -f "$(BIN_DIR)/$*_direct.bin" ]; then \
+	elif [ -f "$(BIN_DIR)/firmware_$*.bin" ]; then \
 		echo "========================================"; \
-		echo "Running: $*_direct"; \
+		echo "Running firmware: $* (at 0x0000)"; \
 		echo "========================================"; \
-		$(TARGET) $(BIN_DIR)/$*_direct.bin; \
+		$(TARGET) $(BIN_DIR)/firmware_$*.bin; \
 		echo "========================================"; \
 	else \
 		echo "Program $*.bin not found!"; \
@@ -226,51 +235,52 @@ run-%: $(TARGET)
 		$(MAKE) list; \
 	fi
 
-# Clean
-.PHONY: clean
-clean:
-	rm -rf $(BUILD_DIR) $(BIN_DIR)
-
-# List available tests
+# List available programs
 .PHONY: list
 list:
-	@echo "Available assembly tests:"
-	@ls $(ASM_DIR)/*.s 2>/dev/null | xargs -n1 basename || echo "None"
+	@echo "Firmware (runs at 0x0000):"
+	@ls $(FIRMWARE_DIR)/*.s 2>/dev/null | xargs -n1 basename | sed 's/\.s$$//' || echo "  None"
 	@echo ""
-	@echo "Available C tests:"
-	
+	@echo "User assembly programs (runs at 0x2000):"
+	@ls $(USER_ASM_DIR)/*.s 2>/dev/null | xargs -n1 basename | sed 's/\.s$$//' || echo "  None"
 	@echo ""
-	@echo "Available programs:"
-	@ls $(PROGRAMS_DIR)/*.c 2>/dev/null | xargs -n1 basename || echo "None"
+	@echo "User C programs (runs at 0x2000):"
+	@ls $(USER_C_DIR)/*.c 2>/dev/null | xargs -n1 basename | sed 's/\.c$$//' || echo "  None"
 
 # Help
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  all          - Build the emulator (default)"
+	@echo "  all          - Build the emulator and all programs (default)"
 	@echo "  tests        - Build all test programs"
-	@echo "  run          - Build and run all tests"
+	@echo "  run          - Build and run all programs"
 	@echo "  run-menu     - Interactive menu to select program"
 	@echo "  run-<name>   - Run specific program (e.g., make run-hello)"
-	@echo "  list         - List available tests"
+	@echo "  list         - List available programs"
 	@echo "  clean        - Remove build files"
 	@echo "  help         - Show this help"
+	@echo ""
+	@echo "Memory map:"
+	@echo "  Firmware:   0x0000 - 0x1FFF (8KB)"
+	@echo "  User space: 0x2000 - ..."
+	@echo ""
+	@echo "RISC-V extensions enabled: $(RISCV_ARCH)"
 
 # Quick test
 .PHONY: test
 test: $(TARGET)
-	@if [ -f "$(PROGRAMS_DIR)/minimal_c_safe.c" ]; then \
-		$(MAKE) $(BIN_DIR)/minimal_c_safe.bin; \
+	@if [ -f "$(FIRMWARE_DIR)/boot.s" ]; then \
+		$(MAKE) $(BIN_DIR)/firmware_boot.bin; \
 		echo "========================================"; \
-		echo "Testing minimal_c_safe"; \
+		echo "Testing firmware boot"; \
 		echo "========================================"; \
-		$(TARGET) $(BIN_DIR)/minimal_c_safe.bin; \
-	elif [ -f "$(PROGRAMS_DIR)/hello.c" ]; then \
-		$(MAKE) $(BIN_DIR)/hello.bin; \
+		$(TARGET) $(BIN_DIR)/firmware_boot.bin; \
+	elif [ -f "$(USER_C_DIR)/main.c" ]; then \
+		$(MAKE) $(BIN_DIR)/main.bin; \
 		echo "========================================"; \
-		echo "Testing hello"; \
+		echo "Testing main"; \
 		echo "========================================"; \
-		$(TARGET) $(BIN_DIR)/hello.bin; \
+		$(TARGET) $(BIN_DIR)/main.bin; \
 	else \
 		echo "No test program found"; \
 	fi

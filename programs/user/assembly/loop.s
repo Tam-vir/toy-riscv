@@ -6,25 +6,26 @@ _start:
     li a7, 4
     ecall
     
-    li t0, 1
-    li t1, 5
+    li a0, 1
     
 loop:
-    mv a0, t0
     li a7, 1
     ecall
-    
+    mv t2, a0
+
     li a0, ' '
     li a7, 11
     ecall
     
-    addi t0, t0, 1
-    ble t0, t1, loop
+    mv a0, t2
+    addi a0, a0, 1
+
+    li t0, 6
+    blt a0, t0, loop
     
-    li a0, '\n'
-    li a7, 11
-    ecall
-    
+    j exit
+
+exit:
     li a7, 10
     ecall
 

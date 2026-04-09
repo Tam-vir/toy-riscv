@@ -1,6 +1,5 @@
 #include "riscv.hpp"
 #include <cstring>
-#include <iostream>
 #include <stdexcept>
 #include <bitset>
 #include <climits>
@@ -26,9 +25,12 @@ RISCV::RISCV(uint32_t ram_size) : mem(ram_size) { reset(); }
 
 void RISCV::reset()
 {
-    pc = 0;
+    pc = 0x00000000;
     running = true;
     std::memset(reg, 0, sizeof(reg));
+
+    // CSR defaults (important!)
+    write_csr(0x300, 0x00000000); // mstatus
 }
 
 void RISCV::run()
@@ -76,6 +78,46 @@ void RISCV::load_program(const uint8_t *data, uint32_t size, uint32_t start_addr
         throw std::runtime_error("Program too large");
     std::memcpy(&mem[start_addr], data, size);
     pc = start_addr;
+}
+void RISCV::trap(uint32_t cause, bool is_interrupt)
+{
+    uint32_t mstatus = read_csr(0x300);
+
+    // mepc = return address
+    write_csr(0x341, pc);
+
+    // mcause = interrupt bit + cause
+    if (is_interrupt)
+        write_csr(0x342, cause | 0x80000000);
+    else
+        write_csr(0x342, cause);
+
+    // save MIE into MPIE
+    uint32_t mie = (mstatus >> 3) & 1;
+    mstatus = (mstatus & ~(1 << 7)) | (mie << 7);
+
+    // disable interrupts
+    mstatus &= ~(1 << 3);
+
+    write_csr(0x300, mstatus);
+
+    uint32_t mtvec = read_csr(0x305);
+    uint32_t base = mtvec & ~0x3;
+    uint32_t mode = mtvec & 0x3;
+
+    if (mode == 0)
+    {
+        // DIRECT MODE
+        pc = base;
+    }
+    else
+    {
+        // VECTORED MODE
+        if (is_interrupt)
+            pc = base + 4 * cause;
+        else
+            pc = base;
+    }
 }
 
 void RISCV::exec(uint32_t instr)
@@ -458,28 +500,63 @@ void RISCV::exec(uint32_t instr)
     // SYSTEM
     case 0x73:
     {
+        uint32_t imm12 = instr >> 20;
+
         if (funct3 == 0x0)
         {
-            // ECALL/EBREAK
-            if ((instr >> 20) == 0x0)
-            { // ECALL
+            if (imm12 == 0x0)
+            {
                 if (env)
-                    env->ecall(*this);
-                else
-                    running = false;
+                    env->on_trap(*this, 11);
+                
             }
-            else if ((instr >> 20) == 0x1)
-            { // EBREAK
-                std::cerr << "EBREAK instruction at PC=0x"
-                          << std::hex << (pc - 4) << std::dec << std::endl;
+            else if (imm12 == 0x1)
+            {
                 if (env)
-                    env->ebreak(*this);
+                    env->on_trap(*this, 3);
+
+            }
+            else if (imm12 == 0x302) // MRET
+            {
+                uint32_t m = read_csr(0x300);
+                uint32_t mpie = (m >> 7) & 1;
+
+                m = (m & ~(1 << 3)) | (mpie << 3);
+                m |= (1 << 7);
+
+                write_csr(0x300, m);
+
+                pc = read_csr(0x341) & ~1u;
             }
         }
         else
         {
-            // CSR instructions (not implemented)
-            throw std::runtime_error("CSR instructions not implemented");
+            uint32_t csr_addr = (instr >> 20) & 0xFFF;
+            uint32_t csr_val = read_csr(csr_addr);
+
+            switch (funct3)
+            {
+            case 1:
+                reg[rd] = csr_val;
+                write_csr(csr_addr, reg[rs1]);
+                break;
+
+            case 2:
+                reg[rd] = csr_val;
+                if (rs1)
+                    write_csr(csr_addr, csr_val | reg[rs1]);
+                break;
+
+            case 3:
+                reg[rd] = csr_val;
+                if (rs1)
+                    write_csr(csr_addr, csr_val & ~reg[rs1]);
+                break;
+
+            default:
+                trap(2);
+                break;
+            }
         }
         break;
     }
@@ -489,4 +566,6 @@ void RISCV::exec(uint32_t instr)
                                  std::to_string(opcode) + " at PC=0x" +
                                  std::to_string(pc - 4));
     }
+
 }
+

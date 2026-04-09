@@ -77,7 +77,6 @@ void scanint(int *x) {
         :
         : "a0", "a7"
     );
-    return *x;
 }
 
 // =====================
@@ -92,7 +91,6 @@ void scanchar(char *c) {
         :
         : "a0", "a7"
     );
-    return c;
 }
 
 // =====================

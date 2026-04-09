@@ -1,4 +1,4 @@
-#include "../../include/stndio.h"
+#include "../../../include/stndio.h"
 
 int main(){
     int w;
