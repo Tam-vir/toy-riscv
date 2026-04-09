@@ -29,7 +29,6 @@ void RISCV::reset()
     pc = 0;
     running = true;
     std::memset(reg, 0, sizeof(reg));
-    // Initialize multiplication/division state if needed
 }
 
 void RISCV::run()

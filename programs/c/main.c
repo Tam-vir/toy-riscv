@@ -1,4 +1,4 @@
-#include "../../include/stdo.h"
+#include "../../include/stndio.h"
 
 void main(void) {
     prts("Hello World!\n");

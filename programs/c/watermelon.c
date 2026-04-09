@@ -1,12 +1,14 @@
-#include "../../include/stdo.h"
+#include "../../include/stndio.h"
 
 int main(){
-    for(int w = 0; w < 20; w++){
-        if (w % 2 == 0 && (w > 2)) {
-            prts("Yes\n");
-        } else {
-            prts("No\n");
-        }
+    int w;
+    prts("Enter the weight: ");
+    scanint(&w);
+
+    if(w % 2 == 0 && w > 2){
+        prts("YES\n");
+    } else {
+        prts("NO\n");
     }
 
     return 0;

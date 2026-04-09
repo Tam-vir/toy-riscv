@@ -15,10 +15,10 @@ INCLUDE_C_OBJS = $(patsubst $(INCLUDE_DIR)/%.c,$(BUILD_DIR)/include_%.o,$(INCLUD
 # Compiler and tools
 CXX = g++
 CXXFLAGS = -std=c++11 -I$(SRC_DIR) -I$(INCLUDE_DIR) -Wall -Wextra
-RISCV_CC = riscv64-elf-gcc
-RISCV_AS = riscv64-elf-as
-RISCV_LD = riscv64-elf-ld
-RISCV_OBJCOPY = riscv64-elf-objcopy
+RISCV_CC = riscv64-unknown-elf-gcc
+RISCV_AS = riscv64-unknown-elf-as
+RISCV_LD = riscv64-unknown-elf-ld
+RISCV_OBJCOPY = riscv64-unknown-elf-objcopy
 
 # Source files
 SRCS = $(SRC_DIR)/main.cpp \
