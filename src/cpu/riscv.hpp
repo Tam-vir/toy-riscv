@@ -84,6 +84,7 @@ public:
          }
     }
     void trap(uint32_t cause, bool is_interrupt = false);
+    uint64_t get_cycles() const;
     void stop() { running = false; }
 
 private:
@@ -97,7 +98,7 @@ private:
     uint32_t mepc = 0;
     uint32_t mcause = 0;
     uint32_t mtval = 0;
-
+    uint64_t cycles = 0; // Cycle count for performance measurement
     bool running = false;
     std::vector<uint8_t> mem; // RAM
 

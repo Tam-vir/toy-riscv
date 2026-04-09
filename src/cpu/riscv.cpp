@@ -20,13 +20,14 @@ static inline uint32_t zext(uint32_t value, int bits)
     return value & ((1u << bits) - 1);
 }
 
-RISCV::RISCV() : mem(RAM_SIZE) { reset(); }
-RISCV::RISCV(uint32_t ram_size) : mem(ram_size) { reset(); }
+RISCV::RISCV() : mem(RAM_SIZE), cycles(0) { reset(); }
+RISCV::RISCV(uint32_t ram_size) : mem(ram_size), cycles(0) { reset(); }
 
 void RISCV::reset()
 {
     pc = 0x00000000;
     running = true;
+    cycles = 0;
     std::memset(reg, 0, sizeof(reg));
 
     // CSR defaults (important!)
@@ -43,7 +44,9 @@ void RISCV::step()
 {
     uint32_t instr = fetch32(pc);
     pc += 4;
+    cycles++; // Base cycle for instruction fetch and decode
     exec(instr);
+    
     reg[0] = 0; // x0 always zero
 }
 
@@ -51,21 +54,47 @@ uint32_t RISCV::fetch32(uint32_t addr)
 {
     if (addr + 3 >= mem.size())
         throw std::runtime_error("Fetch out of bounds");
+
+    // Memory access cycles
+    cycles++; // For memory read
+
     return mem[addr] | (mem[addr + 1] << 8) | (mem[addr + 2] << 16) | (mem[addr + 3] << 24);
 }
 
-uint8_t RISCV::load8(uint32_t addr) { return mem.at(addr); }
-uint16_t RISCV::load16(uint32_t addr) { return mem.at(addr) | (mem.at(addr + 1) << 8); }
-uint32_t RISCV::load32(uint32_t addr) { return mem.at(addr) | (mem.at(addr + 1) << 8) | (mem.at(addr + 2) << 16) | (mem.at(addr + 3) << 24); }
+uint8_t RISCV::load8(uint32_t addr)
+{
+    cycles++; // Memory access cycle
+    return mem.at(addr);
+}
 
-void RISCV::store8(uint32_t addr, uint8_t value) { mem.at(addr) = value; }
+uint16_t RISCV::load16(uint32_t addr)
+{
+    cycles++; // Memory access cycle
+    return mem.at(addr) | (mem.at(addr + 1) << 8);
+}
+
+uint32_t RISCV::load32(uint32_t addr)
+{
+    cycles++; // Memory access cycle
+    return mem.at(addr) | (mem.at(addr + 1) << 8) | (mem.at(addr + 2) << 16) | (mem.at(addr + 3) << 24);
+}
+
+void RISCV::store8(uint32_t addr, uint8_t value)
+{
+    cycles++; // Memory access cycle
+    mem.at(addr) = value;
+}
+
 void RISCV::store16(uint32_t addr, uint16_t value)
 {
+    cycles++; // Memory access cycle
     mem.at(addr) = value & 0xFF;
     mem.at(addr + 1) = (value >> 8) & 0xFF;
 }
+
 void RISCV::store32(uint32_t addr, uint32_t value)
 {
+    cycles++; // Memory access cycle
     mem.at(addr) = value & 0xFF;
     mem.at(addr + 1) = (value >> 8) & 0xFF;
     mem.at(addr + 2) = (value >> 16) & 0xFF;
@@ -79,8 +108,11 @@ void RISCV::load_program(const uint8_t *data, uint32_t size, uint32_t start_addr
     std::memcpy(&mem[start_addr], data, size);
     pc = start_addr;
 }
+
 void RISCV::trap(uint32_t cause, bool is_interrupt)
 {
+    cycles += 4; // Trap handling takes extra cycles
+
     uint32_t mstatus = read_csr(0x300);
 
     // mepc = return address
@@ -129,6 +161,10 @@ void RISCV::exec(uint32_t instr)
     uint32_t rs2 = (instr >> 20) & 0x1F;
     uint32_t funct7 = (instr >> 25);
 
+    // Base cycle for instruction execution (already counted in step())
+    // Additional cycles for complex instructions
+    uint32_t extra_cycles = 0;
+
     switch (opcode)
     {
     // LUI
@@ -150,6 +186,7 @@ void RISCV::exec(uint32_t instr)
 
         reg[rd] = pc;
         pc += simm - 4;
+        extra_cycles = 1; // Branch penalty
         break;
     }
 
@@ -160,6 +197,7 @@ void RISCV::exec(uint32_t instr)
 
         reg[rd] = pc;
         pc = target;
+        extra_cycles = 1; // Jump penalty
         break;
     }
 
@@ -198,7 +236,9 @@ void RISCV::exec(uint32_t instr)
         if (branch)
         {
             pc += simm - 4;
+            extra_cycles = 1; // Branch taken penalty
         }
+        // else: branch not taken - no penalty
         break;
     }
 
@@ -253,6 +293,9 @@ void RISCV::exec(uint32_t instr)
         // Check if this is an M-extension instruction (funct7[0] = 1)
         if ((funct7 & 0x1) == 0x1)
         {
+            // M-extension instructions take extra cycles
+            extra_cycles = 2; // Base penalty for multiply/divide
+
             // M-extension instructions (RV32M)
             switch (funct3)
             {
@@ -264,7 +307,7 @@ void RISCV::exec(uint32_t instr)
                 reg[rd] = (uint32_t)result;
                 break;
             }
-            
+
             case 0x1: // MULH (signed × signed)
             {
                 int32_t a = (int32_t)reg[rs1];
@@ -273,7 +316,7 @@ void RISCV::exec(uint32_t instr)
                 reg[rd] = (uint32_t)(result >> 32);
                 break;
             }
-            
+
             case 0x2: // MULHSU (signed × unsigned)
             {
                 int32_t a = (int32_t)reg[rs1];
@@ -282,7 +325,7 @@ void RISCV::exec(uint32_t instr)
                 reg[rd] = (uint32_t)(result >> 32);
                 break;
             }
-            
+
             case 0x3: // MULHU (unsigned × unsigned)
             {
                 uint64_t a = (uint64_t)reg[rs1];
@@ -291,12 +334,13 @@ void RISCV::exec(uint32_t instr)
                 reg[rd] = (uint32_t)(result >> 32);
                 break;
             }
-            
+
             case 0x4: // DIV (signed division)
             {
                 int32_t dividend = (int32_t)reg[rs1];
                 int32_t divisor = (int32_t)reg[rs2];
-                
+                extra_cycles = 4; // Division takes more cycles
+
                 // Handle division by zero according to RISC-V spec
                 if (divisor == 0)
                 {
@@ -315,12 +359,13 @@ void RISCV::exec(uint32_t instr)
                 }
                 break;
             }
-            
+
             case 0x5: // DIVU (unsigned division)
             {
                 uint32_t dividend = reg[rs1];
                 uint32_t divisor = reg[rs2];
-                
+                extra_cycles = 4; // Division takes more cycles
+
                 if (divisor == 0)
                 {
                     // Division by zero yields all ones
@@ -332,12 +377,13 @@ void RISCV::exec(uint32_t instr)
                 }
                 break;
             }
-            
+
             case 0x6: // REM (signed remainder)
             {
                 int32_t dividend = (int32_t)reg[rs1];
                 int32_t divisor = (int32_t)reg[rs2];
-                
+                extra_cycles = 4; // Division takes more cycles
+
                 // Handle division by zero according to RISC-V spec
                 if (divisor == 0)
                 {
@@ -353,18 +399,17 @@ void RISCV::exec(uint32_t instr)
                 else
                 {
                     // Standard remainder operation
-                    // Note: In C++, % on negative numbers gives remainder with sign of dividend
-                    // This matches RISC-V spec
                     reg[rd] = (uint32_t)(dividend % divisor);
                 }
                 break;
             }
-            
+
             case 0x7: // REMU (unsigned remainder)
             {
                 uint32_t dividend = reg[rs1];
                 uint32_t divisor = reg[rs2];
-                
+                extra_cycles = 4; // Division takes more cycles
+
                 if (divisor == 0)
                 {
                     // Remainder by zero yields the dividend
@@ -376,7 +421,7 @@ void RISCV::exec(uint32_t instr)
                 }
                 break;
             }
-            
+
             default:
                 throw std::runtime_error("Unknown RV32M funct3");
             }
@@ -444,6 +489,7 @@ void RISCV::exec(uint32_t instr)
     {
         int32_t imm = sign_extend(instr >> 20, 12);
         uint32_t addr = reg[rs1] + imm;
+        extra_cycles = 2; // Load instructions take extra cycles (memory access)
 
         switch (funct3)
         {
@@ -474,6 +520,7 @@ void RISCV::exec(uint32_t instr)
         uint32_t imm = ((instr >> 7) & 0x1F) | ((instr >> 25) << 5);
         int32_t simm = sign_extend(imm, 12);
         uint32_t addr = reg[rs1] + simm;
+        extra_cycles = 2; // Store instructions take extra cycles (memory access)
 
         switch (funct3)
         {
@@ -495,12 +542,14 @@ void RISCV::exec(uint32_t instr)
     // MISC-MEM (FENCE)
     case 0x0F:
         // FENCE instruction - do nothing in emulator
+        extra_cycles = 1; // FENCE has small penalty
         break;
 
     // SYSTEM
     case 0x73:
     {
         uint32_t imm12 = instr >> 20;
+        extra_cycles = 3; // System instructions take more cycles
 
         if (funct3 == 0x0)
         {
@@ -508,13 +557,11 @@ void RISCV::exec(uint32_t instr)
             {
                 if (env)
                     env->on_trap(*this, 11);
-                
             }
             else if (imm12 == 0x1)
             {
                 if (env)
                     env->on_trap(*this, 3);
-
             }
             else if (imm12 == 0x302) // MRET
             {
@@ -527,6 +574,7 @@ void RISCV::exec(uint32_t instr)
                 write_csr(0x300, m);
 
                 pc = read_csr(0x341) & ~1u;
+                extra_cycles = 5; // MRET takes longer
             }
         }
         else
@@ -567,5 +615,11 @@ void RISCV::exec(uint32_t instr)
                                  std::to_string(pc - 4));
     }
 
+    // Add extra cycles for this instruction
+    cycles += extra_cycles;
 }
 
+uint64_t RISCV::get_cycles() const
+{
+    return cycles;
+}

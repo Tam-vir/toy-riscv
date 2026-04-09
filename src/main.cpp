@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
     }
 
     std::cout << "Loading firmware: " << FIRMWARE_PATH << " (" << firmware_size << " bytes)" << std::endl;
-    std::cout << "  Load address: 0x" << std::hex << FIRMWARE_BASE << std::dec << std::endl;
+    // std::cout << "  Load address: 0x" << std::hex << FIRMWARE_BASE << std::dec << std::endl;
 
     // Load firmware at address 0x0000
     cpu.load_program(firmware.data(), firmware.size(), FIRMWARE_BASE);
@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
     }
 
     std::cout << "Loading user program: " << user_filename << " (" << user_size << " bytes)" << std::endl;
-    std::cout << "  Load address: 0x" << std::hex << USER_BASE << std::dec << std::endl;
+    // std::cout << "  Load address: 0x" << std::hex << USER_BASE << std::dec << std::endl;
 
     // Load user program at address 0x2000
     cpu.load_program(user_program.data(), user_program.size(), USER_BASE);

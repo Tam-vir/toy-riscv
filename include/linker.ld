@@ -7,7 +7,9 @@ MEMORY {
 }
 
 SECTIONS {
-    . = ORIGIN(RAM);
+
+    /* Place user program at 0x2000 */
+    . = 0x00002000;
 
     /* Code */
     .text : {
@@ -38,10 +40,10 @@ SECTIONS {
 
     . = ALIGN(4);
 
-    /* Heap start (optional) */
+    /* Heap */
     _heap_start = .;
 
-    /* Stack at top of RAM */
+    /* Stack */
     _stack_top = ORIGIN(RAM) + LENGTH(RAM);
 
     /DISCARD/ : {
