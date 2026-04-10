@@ -1,4 +1,5 @@
 #include "stndio.h"
+#include "stdarg.h"
 
 // =====================
 // Print Character
@@ -106,4 +107,76 @@ void scanstr(char *buf, int max_len) {
         : "r"(buf), "r"(max_len)
         : "a0", "a1", "a7"
     );
+}
+static void prthex(unsigned int x) {
+    char buf[16];
+    int i = 0;
+
+    if (x == 0) {
+        prtc('0');
+        return;
+    }
+
+    while (x) {
+        int d = x % 16;
+        buf[i++] = (d < 10) ? ('0' + d) : ('a' + d - 10);
+        x /= 16;
+    }
+
+    while (i--) {
+        prtc(buf[i]);
+    }
+}
+
+int printf(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+
+    while (*fmt) {
+        if (*fmt != '%') {
+            prtc(*fmt++);
+            continue;
+        }
+
+        fmt++; // skip %
+
+        switch (*fmt) {
+        case 'd': {
+            int val = va_arg(args, int);
+            prtnum(val);
+            break;
+        }
+
+        case 'c': {
+            char c = (char)va_arg(args, int);
+            prtc(c);
+            break;
+        }
+
+        case 's': {
+            char *s = va_arg(args, char *);
+            prts(s);
+            break;
+        }
+
+        case 'x': {
+            unsigned int val = va_arg(args, unsigned int);
+            prthex(val);
+            break;
+        }
+
+        case '%':
+            prtc('%');
+            break;
+
+        default:
+            prtc('?'); // unknown format
+        }
+
+        fmt++;
+    }
+
+    va_end(args);
+    return 0;
 }

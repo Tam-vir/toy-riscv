@@ -42,11 +42,18 @@ void RISCV::run()
 
 void RISCV::step()
 {
+    // Check for interrupts before executing next instruction
+    check_interrupts();
+
     uint32_t instr = fetch32(pc);
     pc += 4;
     cycles++; // Base cycle for instruction fetch and decode
     exec(instr);
-    
+    if (bus)
+    {
+        bus->uart_tick(1); // Advance UART by 1 CPU cycle
+    }
+
     reg[0] = 0; // x0 always zero
 }
 
@@ -64,6 +71,13 @@ uint32_t RISCV::fetch32(uint32_t addr)
 uint8_t RISCV::load8(uint32_t addr)
 {
     cycles++; // Memory access cycle
+
+    // Check if this is MMIO address
+    if (bus && (addr >= 0x1000 && addr <= 0x1FFF))
+    {
+        return bus->load(addr) & 0xFF;
+    }
+
     return mem.at(addr);
 }
 
@@ -76,12 +90,27 @@ uint16_t RISCV::load16(uint32_t addr)
 uint32_t RISCV::load32(uint32_t addr)
 {
     cycles++; // Memory access cycle
+
+    // Check if this is MMIO address (aligned access)
+    if (bus && (addr >= 0x1000 && addr <= 0x1FFF))
+    {
+        return bus->load(addr);
+    }
+
     return mem.at(addr) | (mem.at(addr + 1) << 8) | (mem.at(addr + 2) << 16) | (mem.at(addr + 3) << 24);
 }
 
 void RISCV::store8(uint32_t addr, uint8_t value)
 {
     cycles++; // Memory access cycle
+
+    // Check if this is MMIO address
+    if (bus && (addr >= 0x1000 && addr <= 0x1FFF))
+    {
+        bus->store(addr, value);
+        return;
+    }
+
     mem.at(addr) = value;
 }
 
@@ -95,6 +124,14 @@ void RISCV::store16(uint32_t addr, uint16_t value)
 void RISCV::store32(uint32_t addr, uint32_t value)
 {
     cycles++; // Memory access cycle
+
+    // Check if this is MMIO address (aligned access)
+    if (bus && (addr >= 0x1000 && addr <= 0x1FFF))
+    {
+        bus->store(addr, value);
+        return;
+    }
+
     mem.at(addr) = value & 0xFF;
     mem.at(addr + 1) = (value >> 8) & 0xFF;
     mem.at(addr + 2) = (value >> 16) & 0xFF;
@@ -149,6 +186,97 @@ void RISCV::trap(uint32_t cause, bool is_interrupt)
             pc = base + 4 * cause;
         else
             pc = base;
+    }
+}
+
+// =========================
+// INTERRUPT HANDLING
+// =========================
+
+void RISCV::check_interrupts()
+{
+    // Check if interrupts are globally enabled (MIE bit in mstatus)
+    if (!(mstatus & (1 << 3))) // MIE bit
+        return;
+
+    // Check external interrupts from Bus
+    if (bus)
+    {
+        uint32_t bus_interrupts = bus->get_interrupt_status() & bus->get_interrupt_enable();
+        
+        if (bus_interrupts != 0)
+        {
+            // Find the highest priority pending interrupt
+            for (int i = 0; i < 32; i++)
+            {
+                if (bus_interrupts & (1 << i))
+                {
+                    handle_interrupt(i);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+void RISCV::handle_interrupt(uint32_t interrupt_vector)
+{
+    // Check if this interrupt is enabled in MIE
+    if (!is_interrupt_enabled(interrupt_vector))
+        return;
+
+    // Trigger the trap with interrupt cause
+    trap(interrupt_vector, true);
+
+    // Clear the interrupt in the Bus
+    if (bus)
+    {
+        bus->clear_interrupt(1 << interrupt_vector);
+    }
+}
+
+bool RISCV::is_interrupt_enabled(uint32_t vector)
+{
+    // Check global interrupt enable (MIE in mstatus)
+    if (!(mstatus & (1 << 3))) // MIE bit
+        return false;
+
+    // Check specific interrupt enable in MIE register
+    if (vector < 32)
+    {
+        return (mie & (1 << vector)) != 0;
+    }
+
+    return false;
+}
+
+void RISCV::trigger_external_interrupt(uint32_t vector)
+{
+    if (vector < 32)
+    {
+        // Set the interrupt in MIP
+        mip |= (1 << vector);
+
+        // Also trigger it in the Bus for hardware signaling
+        if (bus)
+        {
+            bus->trigger_interrupt(vector);
+        }
+    }
+}
+
+void RISCV::clear_external_interrupt(uint32_t vector)
+{
+    if (vector < 32)
+    {
+        // Clear the interrupt in MIP
+        mip &= ~(1 << vector);
+
+        // Also clear it in the Bus
+        if (bus)
+        {
+            bus->clear_interrupt(1 << vector);
+        }
     }
 }
 
