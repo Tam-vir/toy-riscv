@@ -179,11 +179,6 @@ The emulator runs in **step-by-step mode** with interactive input:
 
 - **Quit (`q`)**: Stops CPU execution cleanly
 
-- **Debug Output**: Each button press shows:
-  - GPIO state before/after
-  - CPU cycles running
-  - Handler execution progress
-
 ## Project Structure
 
 ```
