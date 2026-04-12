@@ -27,7 +27,6 @@ public:
     virtual void on_gpio_write(uint8_t value);
 
     // Interrupt callback registration
-    // Called when device state changes and can trigger interrupt
     void set_interrupt_callback(std::function<void(uint32_t)> callback);
 
     // Virtual update for derived classes to implement custom behavior

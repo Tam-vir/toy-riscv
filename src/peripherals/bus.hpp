@@ -48,43 +48,29 @@ public:
     Bus();
     ~Bus();
 
-    // =========================
     // MMIO READ/WRITE
-    // =========================
     uint32_t load(uint32_t addr);
     void store(uint32_t addr, uint32_t val);
 
-    // =========================
     // ROUTING CONTROL
-    // =========================
     void set_route_mode(RouteMode mode);
     RouteMode get_route_mode() const;
 
-    // =========================
     // UART ACCESS
-    // =========================
     void uart_write(uint8_t data);
     uint8_t uart_read();
     void uart_tick(uint32_t cpu_cycles);
 
-    // =========================
     // TICK (periodic update)
-    // =========================
     void tick(uint32_t cpu_cycles); // Check GPIO/UART and aggregate interrupts
 
-    // =========================
     // PIN ACCESS (for external / debug)
-    // =========================
     Pin *get_pin(int index);
 
-    // =========================
     // SIGNAL ACCESS (for UART, SPI, etc.)
-    // =========================
     Signal *get_signal(int index);
 
-    // =========================
     // INTERRUPT SUPPORT
-    // =========================
     uint32_t get_interrupt_status() const;
     uint32_t get_interrupt_enable() const;
     void set_interrupt_enable(uint32_t enable);
@@ -102,23 +88,17 @@ private:
     Pin pins[32];       // physical pins
     Signal signals[32]; // wires
 
-    // =========================
     // INTERRUPT STATE
-    // =========================
     uint32_t interrupt_status = 0;       // Active interrupts
     uint32_t interrupt_enable = 0;       // Enabled interrupts
     Signal interrupt_lines[BUS_INT_MAX]; // Physical interrupt lines
 
-    // =========================
     // ROUTING IMPLEMENTATION
-    // =========================
     void apply_routing();
     void route_gpio_only();
     void route_uart_gpio();
 
-    // =========================
     // Address decoding
-    // =========================
     bool is_gpio(uint32_t addr);
     bool is_uart(uint32_t addr);
     bool is_interrupt(uint32_t addr);

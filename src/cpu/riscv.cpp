@@ -51,10 +51,10 @@ void RISCV::step()
     exec(instr);
     if (bus)
     {
-        bus->tick(1); // Periodic bus update: check GPIO, UART, aggregate interrupts
+        bus->tick(1); // Periodic bus update
     }
 
-    reg[0] = 0; // x0 always zero
+    reg[0] = 0;
 }
 
 uint32_t RISCV::fetch32(uint32_t addr)
@@ -189,9 +189,7 @@ void RISCV::trap(uint32_t cause, bool is_interrupt)
     }
 }
 
-// =========================
 // INTERRUPT HANDLING
-// =========================
 
 void RISCV::check_interrupts()
 {
@@ -289,8 +287,6 @@ void RISCV::exec(uint32_t instr)
     uint32_t rs2 = (instr >> 20) & 0x1F;
     uint32_t funct7 = (instr >> 25);
 
-    // Base cycle for instruction execution (already counted in step())
-    // Additional cycles for complex instructions
     uint32_t extra_cycles = 0;
 
     switch (opcode)
@@ -415,7 +411,6 @@ void RISCV::exec(uint32_t instr)
         break;
     }
 
-    // OP (including M extension - multiplication and division)
     case 0x33:
     {
         // Check if this is an M-extension instruction (funct7[0] = 1)

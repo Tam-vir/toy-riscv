@@ -17,7 +17,7 @@ public:
     // GPIO write: button doesn't accept writes (input device)
     virtual void on_gpio_write(uint8_t value) override;
 
-    // Handle terminal input - pressing 't' toggles button
+    // Handle terminal input - pressing 'p' toggles button
     void handle_terminal_input(char key);
 
 private:

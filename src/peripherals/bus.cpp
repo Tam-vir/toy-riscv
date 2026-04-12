@@ -182,8 +182,6 @@ void Bus::tick(uint32_t cpu_cycles)
     {
         uart->tick(cpu_cycles);
 
-        // TODO: Signal TX/RX interrupts based on UART state
-        // This depends on UART implementation having status methods
     }
 }
 
@@ -215,7 +213,6 @@ void Bus::apply_routing()
         route_uart_gpio();
         break;
     case RouteMode::CUSTOM:
-        // Custom routing can be implemented here
         route_gpio_only();
         break;
     }

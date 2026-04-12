@@ -6,10 +6,7 @@ class UART
 {
 public:
     UART(uint32_t baud_rate = 115200)
-        : tx(nullptr), rx(nullptr), baud_rate(baud_rate)
-    {
-        // tx and rx will be set later via connect_tx/connect_rx
-    }
+        : tx(nullptr), rx(nullptr), baud_rate(baud_rate) {}
 
     ~UART() = default;
 
@@ -20,7 +17,7 @@ public:
     void write(uint8_t data)
     {
         if (!tx || tx_busy)
-            return; // ignore or later make FIFO
+            return;
 
         tx_shift = data;
         tx_bit_index = 0;
@@ -102,9 +99,7 @@ public:
 
     void set_cpu_clock(uint32_t hz) { cpu_clock_hz = hz; }
 
-    // =========================
     // INTERRUPT SUPPORT
-    // =========================
     uint32_t get_interrupt_status() const { return interrupt_status; }
     uint32_t get_interrupt_enable() const { return interrupt_enable; }
     void set_interrupt_enable(uint32_t enable) { interrupt_enable = enable; }

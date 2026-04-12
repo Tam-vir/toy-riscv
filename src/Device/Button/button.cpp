@@ -38,8 +38,8 @@ void Button::on_gpio_write(uint8_t value)
 
 void Button::handle_terminal_input(char key)
 {
-    // Toggle button state when 't' is pressed
-    if (key == 't' || key == 'T')
+    // Toggle button state when 'p' is pressed
+    if (key == 'p' || key == 'P')
     {
         Device::set(!state); // Toggle state and trigger interrupt callback
     }

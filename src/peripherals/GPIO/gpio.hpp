@@ -101,9 +101,7 @@ public:
         pin_blocks[port].pins[pin].bind(nullptr);
     }
 
-    // =========================
     // INTERRUPT SUPPORT
-    // =========================
     uint32_t get_interrupt_status() const { return interrupt_status; }
     uint32_t get_interrupt_enable() const { return interrupt_enable; }
     void set_interrupt_enable(uint32_t enable) { interrupt_enable = enable; }
@@ -118,9 +116,7 @@ private:
     uint32_t ctrl = 0x1;
     PinBlock pin_blocks[4];
 
-    // =========================
     // INTERRUPT STATE
-    // =========================
     uint32_t interrupt_status = 0;   // Active GPIO interrupts
     uint32_t interrupt_enable = 0;   // Enabled GPIO interrupts
     uint8_t pin_interrupt_modes[32]; // Interrupt mode per pin

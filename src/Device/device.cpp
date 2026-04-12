@@ -42,7 +42,6 @@ uint8_t Device::on_gpio_read()
 
 void Device::on_gpio_write(uint8_t value)
 {
-    // Default: update device state from GPIO write
     set(value != 0);
 }
 
@@ -53,6 +52,4 @@ void Device::set_interrupt_callback(std::function<void(uint32_t)> callback)
 
 void Device::on_state_changed(bool new_state)
 {
-    // Default implementation: nothing
-    // Derived classes can override to propagate state changes
 }
