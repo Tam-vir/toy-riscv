@@ -1,9 +1,7 @@
 #include "stndio.h"
 #include "stdarg.h"
 
-// =====================
 // Print Character
-// =====================
 void prtc(char c) {
     asm volatile(
         "mv a0, %0\n"
@@ -15,9 +13,7 @@ void prtc(char c) {
     );
 }
 
-// =====================
 // Print String
-// =====================
 void prts(const char *str) {
     asm volatile(
         "mv a0, %0\n"
@@ -29,9 +25,7 @@ void prts(const char *str) {
     );
 }
 
-// =====================
 // Print Integer
-// =====================
 void prtnum(int i) {
     if (i < 0) {
         prtc('-');
@@ -45,9 +39,7 @@ void prtnum(int i) {
     prtc((i % 10) + '0');
 }
 
-// =====================
 // String → Integer
-// =====================
 int stoi(const char *str) {
     int result = 0;
     int i = 0;
@@ -66,9 +58,7 @@ int stoi(const char *str) {
     return result * sign;
 }
 
-// =====================
 // Read Integer
-// =====================
 void scanint(int *x) {
     asm volatile(
         "li a7, 5\n"
@@ -80,9 +70,7 @@ void scanint(int *x) {
     );
 }
 
-// =====================
 // Read Character
-// =====================
 void scanchar(char *c) {
     asm volatile(
         "li a7, 12\n"
@@ -94,9 +82,7 @@ void scanchar(char *c) {
     );
 }
 
-// =====================
 // Read String
-// =====================
 void scanstr(char *buf, int max_len) {
     asm volatile(
         "mv a0, %0\n"

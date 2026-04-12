@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <iostream>
 #include "pinblock.hpp"
 #include "../Signal/signal.hpp"
 
@@ -7,7 +8,7 @@ class GPIO
 {
 public:
     GPIO();
-    
+
     void write(int port, int reg, uint32_t val)
     {
         if (port < 0 || port >= 4)
@@ -16,8 +17,26 @@ public:
         switch (reg)
         {
         case 0x0: // DATA
-            pin_blocks[port].write_out(val);
+        {
+            // For input pins, set external input; for output pins, set output drive
+            uint8_t output_val = 0;
+            uint8_t input_val = val & 0xFF;
+            uint8_t mode = pin_blocks[port].read_mode();
+
+            // Debug
+            //std::cerr << "[GPIO] write port=" << port << " val=" << (int)input_val << " mode=" << (int)mode << std::endl;
+
+            // Separate outputs and external inputs
+            for (int i = 0; i < 8; i++)
+            {
+                if (!(mode & (1 << i))) // output pin
+                    output_val |= ((val >> i) & 1) << i;
+            }
+
+            pin_blocks[port].write_out(output_val);
+            pin_blocks[port].set_external_in(input_val);
             break;
+        }
 
         case 0x4: // MODE
             pin_blocks[port].write_mode(val);
@@ -40,7 +59,10 @@ public:
         switch (reg)
         {
         case 0x0:
-            return pin_blocks[port].read();
+        {
+            uint32_t result = pin_blocks[port].read();
+            return result;
+        }
 
         case 0x4:
             return pin_blocks[port].read_mode();
@@ -99,10 +121,10 @@ private:
     // =========================
     // INTERRUPT STATE
     // =========================
-    uint32_t interrupt_status = 0;     // Active GPIO interrupts
-    uint32_t interrupt_enable = 0;     // Enabled GPIO interrupts
-    uint8_t pin_interrupt_modes[32];   // Interrupt mode per pin
-    uint8_t last_pin_state[4];         // Last known pin state for edge detection
-    Signal interrupt_lines[32];        // Individual pin interrupt lines
-    Signal port_interrupt_lines[4];    // Port-wide interrupt lines
+    uint32_t interrupt_status = 0;   // Active GPIO interrupts
+    uint32_t interrupt_enable = 0;   // Enabled GPIO interrupts
+    uint8_t pin_interrupt_modes[32]; // Interrupt mode per pin
+    uint8_t last_pin_state[4];       // Last known pin state for edge detection
+    Signal interrupt_lines[32];      // Individual pin interrupt lines
+    Signal port_interrupt_lines[4];  // Port-wide interrupt lines
 };

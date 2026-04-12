@@ -53,25 +53,19 @@ void restore_terminal()
 // Simulate a button press by toggling GPIO pin 0
 void simulate_button_press(Bus &bus, RISCV &cpu)
 {
-    // std::cout << "\n[BUTTON] Simulating button press..." << std::endl;
-
     // Read current GPIO port 0 state
     uint32_t current_state = bus.load(0x1000);
-    // std::cout << "[BUTTON] GPIO Port 0 current state: 0x" << std::hex << current_state << std::dec << std::endl;
 
     // Press button (set bit 0 to 1)
-    // std::cout << "[BUTTON] Setting pin 0 HIGH" << std::endl;
     bus.store(0x1000, current_state | 1);
 
     // Run cycles to let the interrupt trigger and handler execute
-    // std::cout << "[BUTTON] Running CPU to process interrupt (100 cycles)..." << std::endl;
     for (int i = 0; i < 100 && cpu.is_running(); i++)
     {
         cpu.step();
     }
 
     // Release button (set bit 0 to 0)
-    //  std::cout << "[BUTTON] Setting pin 0 LOW" << std::endl;
     bus.store(0x1000, current_state & ~1);
 
     // Run a few more cycles
@@ -79,9 +73,6 @@ void simulate_button_press(Bus &bus, RISCV &cpu)
     {
         cpu.step();
     }
-
-    // std::cout << "[BUTTON] Button press complete\n"
-    //           << std::endl;
 }
 
 int main(int argc, char *argv[])

@@ -1,4 +1,5 @@
 #include "bus.hpp"
+#include <iostream>
 
 Bus::Bus()
 {
@@ -30,9 +31,7 @@ Bus::~Bus()
     delete uart;
 }
 
-// =========================
 // MMIO READ
-// =========================
 uint32_t Bus::load(uint32_t addr)
 {
     // Handle interrupt status and enable registers
@@ -77,11 +76,11 @@ uint32_t Bus::load(uint32_t addr)
     return 0;
 }
 
-// =========================
 // MMIO WRITE
-// =========================
 void Bus::store(uint32_t addr, uint32_t val)
 {
+    //std::cerr << "[BUS] store addr=0x" << std::hex << addr << std::dec << " val=" << val << std::endl;
+
     // Handle interrupt enable register
     if (is_interrupt(addr))
     {
@@ -122,9 +121,7 @@ void Bus::store(uint32_t addr, uint32_t val)
     }
 }
 
-// =========================
 // ROUTING CONTROL
-// =========================
 void Bus::set_route_mode(RouteMode mode)
 {
     if (current_route_mode != mode)
@@ -139,9 +136,7 @@ RouteMode Bus::get_route_mode() const
     return current_route_mode;
 }
 
-// =========================
 // UART ACCESS
-// =========================
 void Bus::uart_write(uint8_t data)
 {
     uart->write(data);
@@ -157,9 +152,7 @@ void Bus::uart_tick(uint32_t cpu_cycles)
     uart->tick(cpu_cycles);
 }
 
-// =========================
 // TICK (Periodic Update)
-// =========================
 void Bus::tick(uint32_t cpu_cycles)
 {
     // Check GPIO pin state changes and aggregate interrupts
@@ -179,7 +172,6 @@ void Bus::tick(uint32_t cpu_cycles)
                     interrupt_status |= (1 << i);
                 }
             }
-            // Also handle port-wide interrupts (24-27)
             // These are aggregated by GPIO internally
             gpio->clear_interrupt(gpio_interrupts);
         }
@@ -195,9 +187,7 @@ void Bus::tick(uint32_t cpu_cycles)
     }
 }
 
-// =========================
 // PIN ACCESS (for external / debug)
-// =========================
 Pin *Bus::get_pin(int index)
 {
     if (index < 0 || index >= 32)
@@ -205,9 +195,7 @@ Pin *Bus::get_pin(int index)
     return &pins[index];
 }
 
-// =========================
 // SIGNAL ACCESS (for UART, SPI, etc.)
-// =========================
 Signal *Bus::get_signal(int index)
 {
     if (index < 0 || index >= 32)
@@ -215,9 +203,7 @@ Signal *Bus::get_signal(int index)
     return &signals[index];
 }
 
-// =========================
 // ROUTING IMPLEMENTATION
-// =========================
 void Bus::apply_routing()
 {
     switch (current_route_mode)
@@ -286,9 +272,7 @@ void Bus::route_uart_gpio()
     gpio->check_pin_interrupts();
 }
 
-// =========================
 // Address decoding
-// =========================
 bool Bus::is_gpio(uint32_t addr)
 {
     return addr >= 0x1000 && addr <= 0x101F;
@@ -307,8 +291,8 @@ bool Bus::is_interrupt(uint32_t addr)
 std::pair<int, int> Bus::decode_gpio(uint32_t addr)
 {
     uint32_t offset = addr - 0x1000;
-    int port = offset / 8;
-    int reg = offset % 8;
+    int port = offset / 0x8; // Each port is 0x8 bytes apart
+    int reg = offset % 0x8;  // Register offset within port
     return {port, reg};
 }
 
@@ -319,9 +303,7 @@ std::pair<int, int> Bus::decode_uart(uint32_t addr)
     return {0, reg}; // UART only has one port
 }
 
-// =========================
 // INTERRUPT SUPPORT
-// =========================
 uint32_t Bus::get_interrupt_status() const
 {
     return interrupt_status;

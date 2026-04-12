@@ -3,8 +3,8 @@
 // MMIO addresses
 #define GPIO_PORT0_DATA      0x1000
 #define GPIO_PORT0_MODE      0x1004
-#define GPIO_PORT1_DATA      0x1020
-#define GPIO_PORT1_MODE      0x1024
+#define GPIO_PORT1_DATA      0x1008
+#define GPIO_PORT1_MODE      0x100C
 #define BUS_INT_ENABLE       0x1104
 #define BUS_INT_STATUS       0x1100
 #define BUS_INT_CLEAR        0x110C
@@ -28,16 +28,26 @@ extern void disable_interrupt(int vector);
 extern void enable_interrupts(void);
 
 
-// LED on/off
+// LED on/off (bit 0 of GPIO_PORT1_DATA)
 void set_led(int on) {
-    uint32_t val = on ? 1 : 0;
+    uint32_t val = read_u32(GPIO_PORT1_DATA);
+    if (on) {
+        val |= (1 << 0);  // Set bit 0
+    } else {
+        val &= ~(1 << 0); // Clear bit 0
+    }
     write_u32(GPIO_PORT1_DATA, val);
 }
+// Read LED state (bit 0 of GPIO_PORT1_DATA)
+int read_led(void) {
+    uint32_t val = read_u32(GPIO_PORT1_DATA);
+    return (val & (1 << 0)) ? 1 : 0;
+}
 
-// Read button state
+// Read button state (bit 0 of GPIO_PORT0_DATA)
 int read_button(void) {
     uint32_t val = read_u32(GPIO_PORT0_DATA);
-    return (val & 1) ? 1 : 0;
+    return (val & (1 << 0)) ? 1 : 0;
 }
 
 // Global counter for button presses
@@ -47,12 +57,12 @@ volatile int last_button_state = 0;
 int main(void) {
     prts("=== Button/LED Interrupt Demo ===\n");
     
-    // Configure GPIO
-    // Port 0: input (button at pin 0)
-    write_u32(GPIO_PORT0_MODE, 0x00);
+    // Configure GPIO modes (bit=0: output, bit=1: input)
+    // Port 0: input (button at pin 0) - set bit 0 to 1
+    write_u32(GPIO_PORT0_MODE, 0x01);
     
-    // Port 1: output (LED at pin 0) 
-    write_u32(GPIO_PORT1_MODE, 0xFF);
+    // Port 1: output (LED at pin 0) - set bit 0 to 0
+    write_u32(GPIO_PORT1_MODE, 0x00);
     
     // Initialize LED to off
     set_led(0);
@@ -63,16 +73,31 @@ int main(void) {
     // Poll the button state
     while (1) {
         int button_state = read_button();
+        int led_state = read_led();
         
         // Detect rising edge (0 -> 1 transition)
         if (button_state && !last_button_state) {
+            prts("[BEFORE] Button: ");
+            prtnum(last_button_state);
+            prts(", LED: ");
+            prtnum(led_state);
+            prtc('\n');
+            
             button_count++;
             
             // Toggle LED
-            set_led(button_count & 1);
+            int new_led_value = !led_state;
+            set_led(new_led_value);
+            int new_led_state = read_led();
             
             prts("Button pressed! Count: ");
             prtnum(button_count);
+            
+            prts("\n[AFTER] Button: ");
+            prtnum(button_state);
+            prts(", LED: ");
+            prtnum(new_led_state);
+            prtc('\n');
             prtc('\n');
         }
         
