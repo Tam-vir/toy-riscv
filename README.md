@@ -165,14 +165,6 @@ uint32_t button_state = *(uint32_t*)0x1000;          // Read pin state
 0x110C = BUS_INTERRUPT_CLEAR    (write: clear active interrupts)
 ```
 
-### Interrupt Vectors
-
-| **Vector** | **Source**     | **Description**                |
-| ---------- | -------------- | ------------------------------ |
-| 0-15       | GPIO Pins 0-15 | Individual GPIO pin interrupts |
-| 16-17      | UART           | TX empty, RX data available    |
-| 24-27      | GPIO Ports 0-3 | Port-wide interrupts           |
-
 ## Interactive Mode Features
 
 The emulator runs in **step-by-step mode** with interactive input:
