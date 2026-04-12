@@ -68,10 +68,6 @@ public:
             std::cout << (int32_t)a0;
             break;
 
-        case 2: // Print Character (putchar)
-            std::cout << (char)(a0 & 0xFF);
-            break;
-
         case 4:
         { // Print String (null-terminated)
             uint32_t addr = a0;

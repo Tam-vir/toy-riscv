@@ -124,10 +124,13 @@ Button pressed! Count: 2
 
 | **Number** | **Name**       | **Input**        | **Output** | **Description**                 |
 | ---------- | -------------- | ---------------- | ---------- | ------------------------------- |
-| 1          | `print_int`    | `a0` = integer   | stdout     | Print 32-bit integer in decimal |
-| 2          | `putchar`      | `a0` = char code | stdout     | Print single character          |
-| 4          | `print_string` | `a0` = address   | stdout     | Print null-terminated string    |
-| 10         | `exit`         | —                | —          | Stop execution                  |
+| 1          | `prtnum`     | `a0` = integer   | stdout     | Print 32-bit integer in decimal |
+| 11         | `prtc`       | `a0` = char code | stdout     | Print single character          |
+| 4          | `prts`       | `a0` = address   | stdout     | Print null-terminated string    |
+| 5          | `scanint`    | `a0` = integer   |  stdin     | Read integer from stdin         |
+| 8          | `scanstr`    | `a0` = address   |  stdin     | Read string from stdin          |
+| 12         | `scanchar`   | `a0` = char code |  stdin     | Read character from stdin       |
+| 10         | `exit`       | —                | —          | Stop execution                  |
 
 ## Memory-Mapped I/O (MMIO)
 
