@@ -107,6 +107,7 @@ public:
     }
     void trap(uint32_t cause, bool is_interrupt = false);
     uint64_t get_cycles() const;
+    bool is_running() const { return running; }
     void stop() { running = false; }
 
     // Interrupt handling
@@ -127,7 +128,7 @@ private:
     uint32_t mie = 0;           // Machine Interrupt Enable
     uint32_t mtvec = 0;
     uint32_t mscratch = 0; // Machine Scratch
-    uint32_t mip = 0; // Machine Interrupt Pending
+    uint32_t mip = 0;      // Machine Interrupt Pending
     uint32_t mepc = 0;
     uint32_t mcause = 0;
     uint32_t mtval = 0;

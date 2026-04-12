@@ -68,6 +68,11 @@ public:
     void uart_tick(uint32_t cpu_cycles);
 
     // =========================
+    // TICK (periodic update)
+    // =========================
+    void tick(uint32_t cpu_cycles); // Check GPIO/UART and aggregate interrupts
+
+    // =========================
     // PIN ACCESS (for external / debug)
     // =========================
     Pin *get_pin(int index);

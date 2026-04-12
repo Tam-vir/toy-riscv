@@ -31,63 +31,45 @@ _start:
 
 .align 4
 trap_vector:
-
-    j trap_handler          # 0  (instruction address misaligned)
-    j trap_handler          # 1  (instruction access fault)
-    j trap_handler          # 2  (illegal instruction)
-    j trap_handler          # 3
-    j trap_handler          # 4
-    j trap_handler          # 5
-    j trap_handler          # 6
-    j trap_handler          # 7
-    j trap_handler          # 8  (ECALL U-mode)
-    j trap_handler          # 9  (ECALL S-mode)
-    j trap_handler          # 10
-    j trap_handler          # 11 (ECALL M-mode)
-    j trap_handler          # 12 (instruction page fault)
-    j trap_handler          # 13 (load page fault)
-    j trap_handler          # 14 (reserved)
-    j trap_handler          # 15 (store page fault)
+    # VECTORED MODE: pc = mtvec_base + 4 * (cause & 0x0FFFFFFF)
+    # For synchronous exceptions: pc = mtvec_base (offset 0)
+    # For interrupts: pc = mtvec_base + 4 * vector_number
     
-    # External interrupts start at cause 16
-    j gpio_pin0_handler     # 16 GPIO Pin 0
-    j gpio_pin1_handler     # 17 GPIO Pin 1
-    j gpio_pin2_handler     # 18 GPIO Pin 2
-    j gpio_pin3_handler     # 19 GPIO Pin 3
-    j gpio_pin4_handler     # 20 GPIO Pin 4
-    j gpio_pin5_handler     # 21 GPIO Pin 5
-    j gpio_pin6_handler     # 22 GPIO Pin 6
-    j gpio_pin7_handler     # 23 GPIO Pin 7
-    j gpio_pin8_handler     # 24 GPIO Pin 8
-    j gpio_pin9_handler     # 25 GPIO Pin 9
-    j gpio_pin10_handler    # 26 GPIO Pin 10
-    j gpio_pin11_handler    # 27 GPIO Pin 11
-    j gpio_pin12_handler    # 28 GPIO Pin 12
-    j gpio_pin13_handler    # 29 GPIO Pin 13
-    j gpio_pin14_handler    # 30 GPIO Pin 14
-    j gpio_pin15_handler    # 31 GPIO Pin 15
-    j gpio_pin16_handler    # 32 GPIO Pin 16
-    j gpio_pin17_handler    # 33 GPIO Pin 17
-    j gpio_pin18_handler    # 34 GPIO Pin 18
-    j gpio_pin19_handler    # 35 GPIO Pin 19
-    j gpio_pin20_handler    # 36 GPIO Pin 20
-    j gpio_pin21_handler    # 37 GPIO Pin 21
-    j gpio_pin22_handler    # 38 GPIO Pin 22
-    j gpio_pin23_handler    # 39 GPIO Pin 23
-    j gpio_pin24_handler    # 40 GPIO Pin 24
-    j gpio_pin25_handler    # 41 GPIO Pin 25
-    j gpio_pin26_handler    # 42 GPIO Pin 26
-    j gpio_pin27_handler    # 43 GPIO Pin 27
-    j gpio_pin28_handler    # 44 GPIO Pin 28
-    j gpio_pin29_handler    # 45 GPIO Pin 29
-    j gpio_pin30_handler    # 46 GPIO Pin 30
-    j gpio_pin31_handler    # 47 GPIO Pin 31
-    j gpio_port0_handler    # 48 GPIO Port 0
-    j gpio_port1_handler    # 49 GPIO Port 1
-    j gpio_port2_handler    # 50 GPIO Port 2
-    j gpio_port3_handler    # 51 GPIO Port 3
-    j uart_tx_handler       # 52 UART TX
-    j uart_rx_handler       # 53 UART RX
+    # Vector 0-15: GPIO_PIN0 to GPIO_PIN15 (all interrupt vectors 0-15)
+    j gpio_pin0_handler     # 0  (GPIO Pin 0)
+    j gpio_pin1_handler     # 1  (GPIO Pin 1)
+    j gpio_pin2_handler     # 2  (GPIO Pin 2)
+    j gpio_pin3_handler     # 3  (GPIO Pin 3)
+    j gpio_pin4_handler     # 4  (GPIO Pin 4)
+    j gpio_pin5_handler     # 5  (GPIO Pin 5)
+    j gpio_pin6_handler     # 6  (GPIO Pin 6)
+    j gpio_pin7_handler     # 7  (GPIO Pin 7)
+    j gpio_pin8_handler     # 8  (GPIO Pin 8)
+    j gpio_pin9_handler     # 9  (GPIO Pin 9)
+    j gpio_pin10_handler    # 10 (GPIO Pin 10)
+    j gpio_pin11_handler    # 11 (GPIO Pin 11)
+    j gpio_pin12_handler    # 12 (GPIO Pin 12)
+    j gpio_pin13_handler    # 13 (GPIO Pin 13)
+    j gpio_pin14_handler    # 14 (GPIO Pin 14)
+    j gpio_pin15_handler    # 15 (GPIO Pin 15)
+    
+    # Vector 16-17: UART TX/RX
+    j uart_tx_handler       # 16 (UART TX)
+    j uart_rx_handler       # 17 (UART RX)
+    
+    # Vector 18-23: Reserved
+    j reserved_handler      # 18
+    j reserved_handler      # 19
+    j reserved_handler      # 20
+    j reserved_handler      # 21
+    j reserved_handler      # 22
+    j reserved_handler      # 23
+    
+    # Vector 24-27: GPIO_PORT0 to GPIO_PORT3
+    j gpio_port0_handler    # 24 (GPIO Port 0)
+    j gpio_port1_handler    # 25 (GPIO Port 1)
+    j gpio_port2_handler    # 26 (GPIO Port 2)
+    j gpio_port3_handler    # 27 (GPIO Port 3)
 
 
 ########################################
@@ -100,6 +82,10 @@ trap_handler:
 
     # everything else
     j handle_exception
+
+reserved_handler:
+    # Unused interrupt vector
+    mret
 
 
 ########################################

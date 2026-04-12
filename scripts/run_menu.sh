@@ -31,7 +31,7 @@ build_if_needed() {
     fi
     
     # Check if any user binaries exist
-    if [ -z "$(ls bin/*.bin 2>/dev/null | grep -v firmware_ | head -1)" ]; then
+    if [ -z "$(ls bin/*.bin 2>/dev/null | grep -v -E '(firmware_|bootloader_)' | head -1)" ]; then
         echo -e "${YELLOW}Building user programs...${NC}"
         make tests
     fi
@@ -49,20 +49,9 @@ show_menu() {
     local options=()
     local names=()
     
-    # First show firmware options (if any)
-    for bin in bin/firmware_*.bin; do
-        if [ -f "$bin" ]; then
-            name=$(basename "$bin" .bin)
-            options[idx]="$bin"
-            names[idx]="$name"
-            echo -e "  ${GREEN}$idx.${NC} Run firmware: ${name#firmware_}"
-            ((idx++))
-        fi
-    done
-    
-    # Then show user programs (skip firmware)
+    # Show user programs
     for bin in bin/*.bin; do
-        if [ -f "$bin" ] && [[ ! "$bin" =~ firmware_ ]]; then
+        if [ -f "$bin" ] && [[ ! "$bin" =~ (firmware_|bootloader_) ]]; then
             name=$(basename "$bin" .bin)
             options[idx]="$bin"
             names[idx]="$name"
@@ -141,7 +130,7 @@ run_program() {
         local user_names=()
         
         for user_bin in bin/*.bin; do
-            if [ -f "$user_bin" ] && [[ ! "$user_bin" =~ firmware_ ]]; then
+            if [ -f "$user_bin" ] && [[ ! "$user_bin" =~ (firmware_|bootloader_) ]]; then
                 user_name=$(basename "$user_bin" .bin)
                 user_options[user_idx]="$user_bin"
                 user_names[user_idx]="$user_name"
@@ -202,16 +191,9 @@ run_all() {
     echo -e "${BLUE}Running all user programs${NC}"
     echo -e "${BLUE}========================================${NC}"
     
-    # Check if firmware exists
-    if [ ! -f "$FIRMWARE" ]; then
-        echo -e "${RED}Firmware not found! Please build it first.${NC}"
-        read -p "Press Enter to continue..."
-        return
-    fi
-    
     local count=0
     for bin in bin/*.bin; do
-        if [ -f "$bin" ] && [[ ! "$bin" =~ firmware_ ]]; then
+        if [ -f "$bin" ] && [[ ! "$bin" =~ (firmware_|bootloader_) ]]; then
             name=$(basename "$bin" .bin)
             echo ""
             echo -e "${YELLOW}Running: $name${NC}"
@@ -247,14 +229,14 @@ list_programs() {
     echo -e "${BLUE}User Programs (run at 0x2000):${NC}"
     echo -e "${BLUE}-------------------------------${NC}"
     for bin in bin/*.bin; do
-        if [ -f "$bin" ] && [[ ! "$bin" =~ firmware_ ]]; then
+        if [ -f "$bin" ] && [[ ! "$bin" =~ (firmware_|bootloader_) ]]; then
             name=$(basename "$bin" .bin)
             size=$(stat -c%s "$bin" 2>/dev/null || stat -f%z "$bin" 2>/dev/null)
             echo -e "  ${GREEN}$name${NC} (${size} bytes)"
         fi
     done
     
-    if [ -z "$(ls bin/*.bin 2>/dev/null | grep -v firmware_ | head -1)" ]; then
+    if [ -z "$(ls bin/*.bin 2>/dev/null | grep -v -E '(firmware_|bootloader_)' | head -1)" ]; then
         echo -e "${YELLOW}  No user programs found!${NC}"
     fi
     

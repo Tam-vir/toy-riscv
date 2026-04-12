@@ -158,6 +158,44 @@ void Bus::uart_tick(uint32_t cpu_cycles)
 }
 
 // =========================
+// TICK (Periodic Update)
+// =========================
+void Bus::tick(uint32_t cpu_cycles)
+{
+    // Check GPIO pin state changes and aggregate interrupts
+    if (gpio)
+    {
+        gpio->check_pin_interrupts();
+
+        // Aggregate GPIO interrupts into Bus interrupt_status
+        uint32_t gpio_interrupts = gpio->get_interrupt_status();
+        if (gpio_interrupts != 0)
+        {
+            // Add GPIO interrupts to bus interrupt status (pins 0-15)
+            for (int i = 0; i < 16; i++)
+            {
+                if (gpio_interrupts & (1 << i))
+                {
+                    interrupt_status |= (1 << i);
+                }
+            }
+            // Also handle port-wide interrupts (24-27)
+            // These are aggregated by GPIO internally
+            gpio->clear_interrupt(gpio_interrupts);
+        }
+    }
+
+    // Update UART state and check for tx/rx events
+    if (uart)
+    {
+        uart->tick(cpu_cycles);
+
+        // TODO: Signal TX/RX interrupts based on UART state
+        // This depends on UART implementation having status methods
+    }
+}
+
+// =========================
 // PIN ACCESS (for external / debug)
 // =========================
 Pin *Bus::get_pin(int index)

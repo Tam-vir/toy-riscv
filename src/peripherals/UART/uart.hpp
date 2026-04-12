@@ -6,7 +6,7 @@ class UART
 {
 public:
     UART(uint32_t baud_rate = 115200)
-        : baud_rate(baud_rate), tx(nullptr), rx(nullptr)
+        : tx(nullptr), rx(nullptr), baud_rate(baud_rate)
     {
         // tx and rx will be set later via connect_tx/connect_rx
     }
@@ -109,7 +109,6 @@ public:
     uint32_t get_interrupt_enable() const { return interrupt_enable; }
     void set_interrupt_enable(uint32_t enable) { interrupt_enable = enable; }
     void clear_interrupt(uint32_t mask) { interrupt_status &= ~mask; }
-
 
 private:
     Signal *tx;

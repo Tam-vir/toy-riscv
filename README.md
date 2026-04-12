@@ -1,184 +1,383 @@
-# Minimal RISC-V Emulator (RV32I/M)
+# RISC-V Emulator with Peripheral Support (RV32IM)
 
-A lightweight RISC-V (RV32IM) CPU emulator in C++ with basic environment syscalls, `crt0` and stack setup, capable of running hand-written assembly and simple C programs.
+A lightweight RISC-V (RV32IM) CPU emulator in C++ with **interrupt-driven hardware simulation**, GPIO and UART peripheral support, and interactive hardware signal injection. Demonstrates real-time interrupt handling, memory-mapped I/O, and real-world embedded systems concepts.
 
-## Features
+## Project Motivation
 
-* Implements **RV32I** base integer instructions.
-* Supports **RV32M** extension (multiplication/division/remainder).
-* Basic system calls (`ecall`) via `SimpleEnvironment`:
+This project addresses the challenge of learning computer architecture and embedded systems in an accessible way:
 
-  * Print character, integer (decimal, hexadecimal, binary)
-  * Print string (null-terminated or fixed-length)
-  * Print newline or space
-  * Print memory dump
-  * Print register dump
-  * Exit
-* Handles `crt0` and stack initialization.
-* Simple memory model with bounds checking.
-* Step-by-step execution (`step()`) or full run (`run()`).
-* Modular design: CPU (`RISCV`) and environment (`Environment` / `SimpleEnvironment`).
+- **Cost Barrier**: Real RISC-V development boards are expensive; this emulator runs on any computer
+- **Hardware Risk**: Buggy embedded code can damage real devices; this sandbox is safe to experiment in
+- **Transparency**: See exactly how CPU instructions execute, interrupts fire, and peripherals respond
+- **Education**: Perfect teaching tool for understanding:
+  - CPU instruction cycles and register state
+  - Interrupt handling and control flow
+  - Memory-mapped I/O and bus transactions
+  - Real-time peripheral interaction
 
-## Getting Started
+## Core Features
 
-### Prerequisites
+### CPU & Execution
 
-* C++17 compatible compiler (tested with `g++`)
-* CMake or simple Makefile for building (optional)
-* RISC-V toolchain (e.g., `riscv32-elf-gcc`) for compiling assembly programs.
-* Bash (To make life easier)
+- **RV32I Base Instructions**: LUI, AUIPC, JAL, JALR, branching, arithmetic/logical ops, loads/stores
+- **RV32M Extension**: Multiplication, division, remainder operations
+- **CSR Support**: Machine-level control/status registers (mstatus, mie, mtvec, mepc, mcause, mip, mtval)
+- **Interrupt Handling**: Full trap/interrupt mechanism with vectored and direct modes
+- **Step-by-step Debugging**: Execute and inspect state cycle-by-cycle or run full programs
 
-### Example Syscalls
+### Peripherals & Hardware Simulation
 
-* **Print integer**: `a7 = 1`, `a0 = value`
-* **Print string**: `a7 = 4`, `a0 = address`
-* **Exit program**: `a7 = 10`
+- **GPIO (General Purpose I/O)**
+  - 4 ports × 8 pins = 32 GPIO pins
+  - Configurable input/output modes
+  - Pin state monitoring and change detection
+  - Individual pin interrupts (per-pin and per-port)
+- **UART/Serial Communication**
+  - Configurable baud rate
+  - TX/RX buffering with cycle-accurate timing
+  - Full duplex operation
+- **Memory-Mapped I/O Bus**
+  - Flexible peripheral addressing (0x1000-0x1FFF range)
+  - MMIO register access for all peripherals
+  - Interrupt aggregation and routing
+- **Interactive Signal Injection**
+  - Simulate real-world hardware events from the terminal
+  - Press `p` to trigger button press interrupts
+  - CPU responds with interrupt handlers
+  - Perfect for testing event-driven code
 
-### Memory Access
-
-```cpp
-cpu.load8(addr);
-cpu.load16(addr);
-cpu.load32(addr);
-
-cpu.store8(addr, val);
-cpu.store16(addr, val);
-cpu.store32(addr, val);
-```
-
-### Step Execution
-
-```cpp
-while(cpu.is_running()) {
-    cpu.step(); // executes single instruction
-}
-```
-
-## Instruction Support
+## Supported RISC-V Instructions (RV32IM)
 
 ### Base Instructions (RV32I)
 
-* LUI, AUIPC
-* JAL, JALR
-* Branch: BEQ, BNE, BLT, BGE, BLTU, BGEU
-* Immediate arithmetic/logical: ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI
-* Register arithmetic/logical: ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
-* Loads: LB, LH, LW, LBU, LHU
-* Stores: SB, SH, SW
-* ECALL, EBREAK
+- LUI, AUIPC
+- JAL, JALR
+- Branch: BEQ, BNE, BLT, BGE, BLTU, BGEU
+- Immediate arithmetic/logical: ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLLI, SRLI, SRAI
+- Register arithmetic/logical: ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND
+- Loads: LB, LH, LW, LBU, LHU
+- Stores: SB, SH, SW
+- ECALL, EBREAK
 
 ### M-extension (RV32M)
 
-* MUL, MULH, MULHSU, MULHU
-* DIV, DIVU
-* REM, REMU
+- MUL, MULH, MULHSU, MULHU
+- DIV, DIVU
+- REM, REMU
+
+### CSR Instructions (Zicsr Extension)
+
+- CSRRW, CSRRS, CSRRC
+- CSRRWI, CSRRSI, CSRRCI
+
+This instruction set covers the complete RV32IM base integer and multiplication extension, plus the Zicsr extension for control and status register manipulation. The emulator implements all required instructions for running standard RISC-V software, including interrupt handlers that rely on CSR operations.
+
+### System Features
+
+- 64MB configurable RAM with bounds checking
+- Firmware + user program dual memory layout
+- Boot sequence with `crt0.s` startup/firmware code
+- Stack initialization and frame pointer setup
+- Cycle-accurate timing simulation
+
+## Quick Start
+
+### Build
+
+```bash
+cd toy-riscv
+make all          # Build emulator and all test programs
+```
+
+### Run Button/LED Demo (Interactive!)
+
+```bash
+./bin/rvemu bin/button_led_interrupt.bin
+
+# During execution, press:
+#   p - Simulate button press
+#   q - Quit
+```
+
+Expected output:
+
+```
+=== Button/LED Interrupt Demo ===
+Waiting for button press...
+
+p
+Button pressed! Count: 1
+
+p
+Button pressed! Count: 2
+```
+
+### Run Other Programs
+
+```bash
+./bin/rvemu bin/hello.bin          # Hello world
+./bin/rvemu bin/fibonacci.bin      # Fibonacci sequence
+./bin/rvemu bin/arithmatic.bin     # Arithmetic operations
+```
+
+## Syscalls (Environment Calls)
+
+| **Number** | **Name**       | **Input**        | **Output** | **Description**                 |
+| ---------- | -------------- | ---------------- | ---------- | ------------------------------- |
+| 1          | `print_int`    | `a0` = integer   | stdout     | Print 32-bit integer in decimal |
+| 2          | `putchar`      | `a0` = char code | stdout     | Print single character          |
+| 4          | `print_string` | `a0` = address   | stdout     | Print null-terminated string    |
+| 10         | `exit`         | —                | —          | Stop execution                  |
+
+## Memory-Mapped I/O (MMIO)
+
+### GPIO Registers
+
+**Port 0-3 Data & Mode** (per port):
+
+```
+0x1000 + port*0x20 + 0x00  = GPIO_DATA      (read/write pin state)
+0x1000 + port*0x20 + 0x04  = GPIO_MODE      (pin direction: 0=input, 1=output)
+```
+
+Example: GPIO Port 0, Pin 0 (button)
+
+```c
+uint32_t button_state = *(uint32_t*)0x1000;          // Read pin state
+*(uint32_t*)0x1004 = 0x00;                           // Set as input
+```
+
+### Interrupt Control
+
+```
+0x1100 = BUS_INTERRUPT_STATUS   (read-only: active interrupts)
+0x1104 = BUS_INTERRUPT_ENABLE   (read/write: enable individual interrupts)
+0x1108 = BUS_INTERRUPT_PENDING  (read-only: status & enable)
+0x110C = BUS_INTERRUPT_CLEAR    (write: clear active interrupts)
+```
+
+### Interrupt Vectors
+
+| **Vector** | **Source**     | **Description**                |
+| ---------- | -------------- | ------------------------------ |
+| 0-15       | GPIO Pins 0-15 | Individual GPIO pin interrupts |
+| 16-17      | UART           | TX empty, RX data available    |
+| 24-27      | GPIO Ports 0-3 | Port-wide interrupts           |
+
+## Interactive Mode Features
+
+The emulator runs in **step-by-step mode** with interactive input:
+
+- **Button Press (`p`)**: Simulates GPIO pin 0 state change
+  1. Sets GPIO_PORT0_DATA bit 0 to HIGH
+  2. Runs 100 CPU cycles (allowing interrupt handler to execute)
+  3. Sets GPIO_PORT0_DATA bit 0 to LOW
+  4. Runs 20 more cycles for cleanup
+
+- **Quit (`q`)**: Stops CPU execution cleanly
+
+- **Debug Output**: Each button press shows:
+  - GPIO state before/after
+  - CPU cycles running
+  - Handler execution progress
 
 ## Project Structure
 
 ```
-.
-├── include
-│   ├── linker.ld
-│   ├── math.c
-│   ├── math.h
-│   ├── stdo.c
-│   └── stdo.h
-├── Makefile
-├── programs
-│   ├── assembly
-│   │   ├── arithmatic.s
-│   │   ├── fibonacci.s
-│   │   ├── hello.s
-│   │   └── loop.s
-│   └── c
-│       ├── asm_test.c
-│       ├── main.c
-│       └── watermelon.c
-├── README.md
-├── scripts
-│   └── run_menu.sh
-├── src
-│   ├── cpu
-│   │   ├── riscv.cpp
-│   │   └── riscv.hpp
-│   ├── environment
-│   │   ├── environment.hpp
-│   │   └── simple_env.hpp
-│   └── main.cpp
-└── startup
-    └── crt0.s
-```
-## Example Programs
-`hello.s`
-```asm
-# Simple RISC-V program that prints "Hello, World!"
-.text
-.global _start
-_start:
-    # Load string address
-    lui a0, %hi(msg)
-    addi a0, a0, %lo(msg)
-    
-    # Set syscall: print string
-    li a7, 4
-    ecall
-    
-    # Exit
-    li a7, 10
-    ecall
-
-.data
-msg:
-    .string "Hello, World!\n"
-```
-`Output`
-```
-========================================
-Running: hello
-========================================
-Loading program: bin/hello.bin (4135 bytes)
-Starting execution...
---- Program output ---
-
-Hello, World!
-
---- End of program ---
-Program exited successfully.
-========================================
+toy-riscv/
+├── README.md                      # This file
+├── Makefile                       # Build system
+├── src/
+│   ├── main.cpp                  # Emulator core + interactive mode
+│   ├── cpu/
+│   │   ├── riscv.cpp             # CPU execution engine
+│   │   └── riscv.hpp             # CPU interface
+│   ├── environment/
+│   │   ├── environment.hpp       # Abstract environment interface
+│   │   └── simple_env.hpp        # Syscall handlers
+│   ├── peripherals/
+│   │   ├── bus.cpp/hpp           # Memory-mapped I/O bus
+│   │   ├── GPIO/
+│   │   │   ├── gpio.cpp/hpp      # GPIO controller
+│   │   │   └── pinblock.hpp      # Pin group management
+│   │   ├── UART/
+│   │   │   └── uart.hpp          # Serial interface
+│   │   ├── Signal/
+│   │   │   └── signal.hpp        # Wire/signal abstraction
+│   │   └── pin.hpp               # Physical pin representation
+│   └── Device/
+│       ├── device.cpp/hpp        # Base device class
+│       ├── LED/
+│       │   ├── led.cpp/hpp       # LED controller (prototype)
+│       └── Button/
+│           ├── button.cpp/hpp    # Button controller (prototype)
+├── startup/
+│   └── crt0.s                   # Bootloader + interrupt vector table
+├── include/
+│   ├── linker.ld               # Linker script
+│   ├── math.c/h                # Math utility functions
+│   └── stndio.c/h              # Standard I/O functions
+├── programs/
+│   ├── bootloader/
+│   │   └── boot.s              # Firmware (currently minimal)
+│   └── user/
+│       ├── assembly/
+│       │   ├── hello.s
+│       │   ├── fibonacci.s
+│       │   ├── arithmatic.s
+│       │   ├── loop.s
+│       │   └── button_led_interrupt.s
+│       └── c/
+│           ├── main.c
+│           ├── fibo.c
+│           └── button_led_interrupt.c    # **Interactive GPIO demo!**
+├── scripts/
+│   └── run_menu.sh            # Interactive test menu
+├── bin/                        # Compiled binaries (generated)
+├── build/                      # Build artifacts (generated)
+└── image/                      # (Reserved for disk image export)
 ```
 
+## Example: Button/LED Demo
 
-## Run
+**File**: `programs/user/c/button_led_interrupt.c`
+
+```c
+int main(void) {
+    prtstr("=== Button/LED Interrupt Demo ===\n");
+
+    // Configure GPIO
+    write_u32(0x1000, 0x00);  // Port 0: input (button)
+    write_u32(0x1020, 0xFF);  // Port 1: output (LED)
+
+    // Poll button and toggle LED
+    int last_button = 0;
+    int count = 0;
+
+    while (1) {
+        int button = *(volatile uint32_t*)0x1000 & 1;  // Read pin 0
+
+        // Detect rising edge
+        if (button && !last_button) {
+            count++;
+
+            // Toggle LED
+            uint32_t led = *(volatile uint32_t*)0x1020;
+            *(volatile uint32_t*)0x1020 = led ^ 1;
+
+            prtstr("Button pressed! Count: ");
+            print_int(count);
+            putchar('\n');
+        }
+
+        last_button = button;
+    }
+}
 ```
-bash scripts/run_menu.sh
+
+**Execution**:
+
+```bash
+$ make all
+$ ./bin/rvemu bin/button_led_interrupt.bin
+=== Button/LED Interrupt Demo ===
+Waiting for button press...
+
+# Press 'p' in terminal:
+p
+[BUTTON] Simulating button press...
+[BUTTON] Setting pin 0 HIGH
+Button pressed! Count: 1
+[BUTTON] Setting pin 0 LOW
+[BUTTON] Button press complete
 ```
+
+## Building & Compiling
+
+### Prerequisites
+
+- **C++ Compiler**: g++ with C++11 support
+- **RISC-V Toolchain**: `riscv64-unknown-elf-*` (for compiling user programs)
+- **Make**: GNU Make
+- **Bash**: For utility scripts
+
+### Build Commands
+
+```bash
+make all              # Build emulator + all programs
+make clean            # Remove build artifacts
+make tests            # Build only user programs
+./bin/rvemu <prog>   # Run compiled program
+```
+
+### Makefile Targets
+
+```
+all              - Build emulator and all programs
+clean            - Remove build artifacts
+tests            - Build user programs only
+rvemu            - Build emulator only
+```
+
+## Learning Resources
+
+This project demonstrates:
+
+1. **Computer Architecture**
+   - CPU instruction execution pipeline
+   - Register state management
+   - Memory hierarchy and MMIO
+
+2. **Interrupt Handling**
+   - Trap vector tables
+   - CSR register manipulation
+   - Context saving/restoring
+
+3. **Embedded Systems**
+   - GPIO control and polling
+   - Interrupt-driven programming
+   - Hardware abstraction layers
+
+4. **RISC-V ISA**
+   - Base integer instruction set
+   - Privilege modes
+   - Control and status registers
+
+## University Use
+
+**Perfect for teaching**:
+
+- Computer organization and architecture
+- Operating systems and exception handling
+- Embedded systems design
+- Hardware-software co-design
+- Compiler/assembler backends
+
+**Advantages for coursework**:
+
+- Safe sandbox for buggy code
+- Step-by-step debugging capability
+- Complete system control and visibility
+- Runs on laptops without special hardware
+- Open source and customizable
+
 ## Notes
 
-* Register `x0` is always zero.
-* Memory bounds are checked; accessing out-of-bounds addresses throws exceptions.
-* Currently, CSR instructions are not implemented.
-* All RISC-V integer arithmetic matches the spec, including overflow/division by zero rules.
+- Programs load at 0x2000 (user space)
+- Firmware (if present) loads at 0x0000
+- Stack grows downward from 0x4000000
+- Cycle count available via `get_cycles()`
+- All memory accesses go through the bus (MMIO-compatible)
 
-## Possible Future Updates
+## Future Enhancements
 
-* Implement additional RISC-V extensions (F, D, A, C, etc.)
-
-* Full CSR instruction support
-
-* Exception and interrupt handling
-
-* Support for system-level features like virtual memory
-
-* Debugger interface for stepping, breakpoints, and watchpoints
-* File I/O and more complex syscalls
-
-* Optimization of memory access for larger programs
-
-* Integration with assembly/C compiler toolchains for automated program loading
-
-* GUI or terminal-based visualization of registers and memory
-
-* Multi-core CPU emulation 
+- [ ] Interrupt mode configuration for GPIO pins
+- [ ] SPI/I2C peripheral support
+- [ ] Timer/PWM functionality
+- [ ] Real filesystem integration
+- [ ] GDB remote debugging support
+- [ ] Performance profiling tools
+- [ ] Graphical peripheral visualization
 
 ## License
 

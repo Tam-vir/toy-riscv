@@ -51,7 +51,7 @@ void RISCV::step()
     exec(instr);
     if (bus)
     {
-        bus->uart_tick(1); // Advance UART by 1 CPU cycle
+        bus->tick(1); // Periodic bus update: check GPIO, UART, aggregate interrupts
     }
 
     reg[0] = 0; // x0 always zero
@@ -203,7 +203,7 @@ void RISCV::check_interrupts()
     if (bus)
     {
         uint32_t bus_interrupts = bus->get_interrupt_status() & bus->get_interrupt_enable();
-        
+
         if (bus_interrupts != 0)
         {
             // Find the highest priority pending interrupt

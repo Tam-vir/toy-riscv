@@ -6,13 +6,53 @@
 #include <cstdint>
 #include <iomanip>
 
-class SimpleEnvironment : public Environment {
+#ifndef _WIN32
+#include <fcntl.h>
+#include <unistd.h>
+#include <termios.h>
+#endif
+
+class SimpleEnvironment : public Environment
+{
+private:
+    // Helper: Temporarily disable non-blocking mode and enable echo for stdin reads
+    void enable_blocking_stdin() const
+    {
+#ifndef _WIN32
+        // Disable non-blocking
+        int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+        fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK);
+
+        // Enable echo
+        struct termios tty;
+        tcgetattr(STDIN_FILENO, &tty);
+        tty.c_lflag |= ECHO;
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &tty);
+#endif
+    }
+
+    // Helper: Re-enable non-blocking mode and disable echo
+    void enable_nonblocking_stdin() const
+    {
+#ifndef _WIN32
+        // Disable echo
+        struct termios tty;
+        tcgetattr(STDIN_FILENO, &tty);
+        tty.c_lflag &= ~ECHO;
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &tty);
+
+        // Enable non-blocking
+        int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+        fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+#endif
+    }
+
 public:
     virtual void on_trap(RISCV &cpu, uint32_t cause)
     {
-        if(cause == 11) // ECALL
+        if (cause == 11) // ECALL
             ecall(cpu);
-        else if(cause == 3) // EBREAK
+        else if (cause == 3) // EBREAK
             ebreak(cpu);
     }
     void ecall(RISCV &cpu) override
@@ -24,9 +64,12 @@ public:
         switch (syscall)
         {
 
-
         case 1: // Print Integer
             std::cout << (int32_t)a0;
+            break;
+
+        case 2: // Print Character (putchar)
+            std::cout << (char)(a0 & 0xFF);
             break;
 
         case 4:
@@ -46,11 +89,12 @@ public:
             std::cout << (char)(a0 & 0xFF);
             break;
 
-
         case 5:
         { // Read Integer
             int32_t value;
+            enable_blocking_stdin();
             std::cin >> value;
+            enable_nonblocking_stdin();
             cpu.set_reg(10, (uint32_t)value); // return in a0
             break;
         }
@@ -60,8 +104,10 @@ public:
             uint32_t addr = a0;
             uint32_t max_len = a1;
 
+            enable_blocking_stdin();
             std::string input;
             std::getline(std::cin >> std::ws, input);
+            enable_nonblocking_stdin();
 
             uint32_t i = 0;
             for (; i < input.size() && i < max_len - 1; i++)
@@ -74,12 +120,13 @@ public:
 
         case 12:
         { // Read Character
+            enable_blocking_stdin();
             char c;
             std::cin.get(c);
+            enable_nonblocking_stdin();
             cpu.set_reg(10, (uint32_t)c); // return in a0
             break;
         }
-
 
         case 10: // Exit
             cpu.stop();
@@ -90,9 +137,10 @@ public:
             cpu.stop();
         }
     }
-    void ebreak(RISCV& cpu) override {
-        std::cerr << "EBREAK encountered at PC = 0x\n"; 
-    
+    void ebreak(RISCV &cpu) override
+    {
+        std::cerr << "EBREAK encountered at PC = 0x\n";
+
         cpu.stop();
     }
 };
