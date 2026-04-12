@@ -1,6 +1,8 @@
 # RISC-V Emulator with Peripheral Support (RV32IM)
 
-A lightweight RISC-V (RV32IM) CPU emulator in C++ with **interrupt-driven hardware simulation**, GPIO and UART peripheral support, and interactive hardware signal injection. Demonstrates real-time interrupt handling, memory-mapped I/O, and real-world embedded systems concepts.
+A lightweight RISC-V (RV32IM) CPU emulator in C++ with interrupt-capable hardware simulation, GPIO and UART peripheral support, and interactive hardware signal injection. Demonstrates memory-mapped I/O, CPU execution, and embedded systems concepts.
+
+**The CPU currently handles I/O with Polling-based I/O, though Interrupt-driven I/O is supported.**
 
 ## Project Motivation
 
@@ -42,9 +44,7 @@ This project addresses the challenge of learning computer architecture and embed
   - Interrupt aggregation and routing
 - **Interactive Signal Injection**
   - Simulate real-world hardware events from the terminal
-  - Press `p` to trigger button press interrupts
-  - CPU responds with interrupt handlers
-  - Perfect for testing event-driven code
+  - Press `p` to trigger button presses, `q` to quit
 
 ## Supported RISC-V Instructions (RV32IM)
 
@@ -71,6 +71,8 @@ This project addresses the challenge of learning computer architecture and embed
 - CSRRWI, CSRRSI, CSRRCI
 
 This instruction set covers the complete RV32IM base integer and multiplication extension, plus the Zicsr extension for control and status register manipulation. The emulator implements all required instructions for running standard RISC-V software, including interrupt handlers that rely on CSR operations.
+
+
 
 ### System Features
 
@@ -106,10 +108,14 @@ Expected output:
 Waiting for button press...
 
 p
+[BEFORE] Button: 0, LED: 0
 Button pressed! Count: 1
+[AFTER] Button: 1, LED: 1
 
 p
+[BEFORE] Button: 0, LED: 1
 Button pressed! Count: 2
+[AFTER] Button: 1, LED: 0
 ```
 
 ### Run Other Programs
@@ -139,8 +145,8 @@ Button pressed! Count: 2
 **Port 0-3 Data & Mode** (per port):
 
 ```
-0x1000 + port*0x20 + 0x00  = GPIO_DATA      (read/write pin state)
-0x1000 + port*0x20 + 0x04  = GPIO_MODE      (pin direction: 0=input, 1=output)
+0x1000 + port*0x08 + 0x00  = GPIO_DATA      (read/write pin state)
+0x1000 + port*0x08 + 0x04  = GPIO_MODE      (pin direction: 0=input, 1=output)
 ```
 
 Example: GPIO Port 0, Pin 0 (button)
@@ -173,7 +179,7 @@ The emulator runs in **step-by-step mode** with interactive input:
 
 - **Button Press (`p`)**: Simulates GPIO pin 0 state change
   1. Sets GPIO_PORT0_DATA bit 0 to HIGH
-  2. Runs 100 CPU cycles (allowing interrupt handler to execute)
+  2. Runs 100 CPU cycles
   3. Sets GPIO_PORT0_DATA bit 0 to LOW
   4. Runs 20 more cycles for cleanup
 
@@ -236,58 +242,6 @@ toy-riscv/
 └── image/                      # (Reserved for disk image export)
 ```
 
-## Example: Button/LED Demo
-
-**File**: `programs/user/c/button_led_interrupt.c`
-
-```c
-int main(void) {
-    prtstr("=== Button/LED Interrupt Demo ===\n");
-
-    // Configure GPIO
-    write_u32(0x1000, 0x00);  // Port 0: input (button)
-    write_u32(0x1020, 0xFF);  // Port 1: output (LED)
-
-    // Poll button and toggle LED
-    int last_button = 0;
-    int count = 0;
-
-    while (1) {
-        int button = *(volatile uint32_t*)0x1000 & 1;  // Read pin 0
-
-        // Detect rising edge
-        if (button && !last_button) {
-            count++;
-
-            // Toggle LED
-            uint32_t led = *(volatile uint32_t*)0x1020;
-            *(volatile uint32_t*)0x1020 = led ^ 1;
-
-            prtstr("Button pressed! Count: ");
-            print_int(count);
-            putchar('\n');
-        }
-
-        last_button = button;
-    }
-}
-```
-
-**Execution**:
-
-```bash
-$ make all
-$ ./bin/rvemu bin/button_led_interrupt.bin
-=== Button/LED Interrupt Demo ===
-Waiting for button press...
-
-# Press 'p' in terminal:
-p
-
-Button pressed! Count: 1
-
-```
-
 ## Building & Compiling
 
 ### Prerequisites
@@ -324,17 +278,12 @@ This project demonstrates:
    - Register state management
    - Memory hierarchy and MMIO
 
-2. **Interrupt Handling**
-   - Trap vector tables
-   - CSR register manipulation
-   - Context saving/restoring
-
-3. **Embedded Systems**
+2. **Embedded Systems**
    - GPIO control and polling
    - Interrupt-driven programming
    - Hardware abstraction layers
 
-4. **RISC-V ISA**
+3. **RISC-V ISA**
    - Base integer instruction set
    - Privilege modes
    - Control and status registers
