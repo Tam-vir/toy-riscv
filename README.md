@@ -210,14 +210,14 @@ toy-riscv/
 │       └── Button/
 │           ├── button.cpp/hpp    # Button controller (prototype)
 ├── startup/
-│   └── crt0.s                   # Bootloader + interrupt vector table
+│   └── crt0.s                   # Firmware + interrupt vector table
 ├── include/
 │   ├── linker.ld               # Linker script
 │   ├── math.c/h                # Math utility functions
 │   └── stndio.c/h              # Standard I/O functions
 ├── programs/
 │   ├── bootloader/
-│   │   └── boot.s              # Firmware (currently minimal)
+│   │   └── boot.s              # Bootloader
 │   └── user/
 │       ├── assembly/
 │       │   ├── hello.s
@@ -283,11 +283,9 @@ Waiting for button press...
 
 # Press 'p' in terminal:
 p
-[BUTTON] Simulating button press...
-[BUTTON] Setting pin 0 HIGH
+
 Button pressed! Count: 1
-[BUTTON] Setting pin 0 LOW
-[BUTTON] Button press complete
+
 ```
 
 ## Building & Compiling
