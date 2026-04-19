@@ -44,7 +44,7 @@ SECTIONS {
     _heap_start = .;
 
     /* Stack */
-    _stack_top = ORIGIN(RAM) + LENGTH(RAM);
+    _stack_top = ORIGIN(RAM) + LENGTH(RAM) - 0x2000;
 
     /DISCARD/ : {
         *(.eh_frame)

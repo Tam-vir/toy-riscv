@@ -1,7 +1,7 @@
 .section .text
-.global _start
+.global main
 
-_start:
+main:
     la a0, header
     li a7, 4
     ecall

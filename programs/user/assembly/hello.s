@@ -1,7 +1,7 @@
 .text
-.global _start
+.global main
 
-_start:
+main:
     la a0, msg
     li a7, 4
     ecall

@@ -1,6 +1,5 @@
 #!/bin/bash
 # Interactive runner for RISC-V emulator
-
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,6 +15,9 @@ NC='\033[0m' # No Color
 
 EMULATOR="bin/rvemu"
 FIRMWARE="bin/firmware_boot.bin"
+
+# Global flag for interactive mode
+INTERACTIVE_MODE=1
 
 # Build if needed
 build_if_needed() {
@@ -35,6 +37,49 @@ build_if_needed() {
         echo -e "${YELLOW}Building user programs...${NC}"
         make tests
     fi
+}
+
+# Safe read function that handles errors gracefully
+safe_read() {
+    local prompt="$1"
+    local var_name="$2"
+    local default="${3:-}"
+    
+    # If not in interactive mode, use default
+    if [ $INTERACTIVE_MODE -eq 0 ]; then
+        if [ -n "$default" ]; then
+            eval "$var_name='$default'"
+        fi
+        return 0
+    fi
+    
+    # Try to read with error handling
+    local input=""
+    printf "%s" "$prompt" >&2
+    
+    # Use a temporary file descriptor to avoid read errors
+    if ! read -r input < /dev/tty 2>/dev/null; then
+        # Fallback: try reading from stdin
+        if ! read -r input 2>/dev/null; then
+            echo -e "${YELLOW}No input available. Using default: $default${NC}" >&2
+            input="$default"
+        fi
+    fi
+    
+    eval "$var_name='$input'"
+    return 0
+}
+
+# Simple press enter function
+press_enter() {
+    if [ $INTERACTIVE_MODE -eq 0 ]; then
+        return 0
+    fi
+    
+    printf "Press Enter to continue..." >&2
+    # Try to read from /dev/tty first, then stdin
+    read < /dev/tty 2>/dev/null || read 2>/dev/null || true
+    echo >&2
 }
 
 # Show menu
@@ -71,7 +116,8 @@ show_menu() {
     total_options=$((idx-1))
     
     while true; do
-        read -p "Select option: " choice
+        local choice=""
+        safe_read "Select option: " choice ""
         
         case $choice in
             [1-9]*)
@@ -80,6 +126,7 @@ show_menu() {
                     return 1
                 else
                     echo -e "${RED}Invalid selection!${NC}"
+                    sleep 1
                 fi
                 ;;
             a|A)
@@ -104,8 +151,13 @@ show_menu() {
                 echo -e "${BLUE}Goodbye!${NC}"
                 exit 0
                 ;;
+            "")
+                # Empty input, just loop again
+                continue
+                ;;
             *)
                 echo -e "${RED}Invalid selection!${NC}"
+                sleep 1
                 ;;
         esac
     done
@@ -141,14 +193,15 @@ run_program() {
         
         if [ $user_idx -eq 1 ]; then
             echo -e "${RED}No user programs found! Please build some first.${NC}"
-            read -p "Press Enter to continue..."
+            press_enter
             return
         fi
         
         echo ""
-        read -p "Select user program (1-$((user_idx-1))): " user_choice
+        local user_choice=""
+        safe_read "Select user program (1-$((user_idx-1))): " user_choice ""
         
-        if [ $user_choice -ge 1 ] && [ $user_choice -lt $user_idx ]; then
+        if [ -n "$user_choice" ] && [ $user_choice -ge 1 ] && [ $user_choice -lt $user_idx ]; then
             echo ""
             echo -e "${BLUE}========================================${NC}"
             echo -e "${BLUE}Running: $name with ${user_names[$user_choice]}${NC}"
@@ -163,6 +216,7 @@ run_program() {
             echo -e "${BLUE}========================================${NC}"
         else
             echo -e "${RED}Invalid selection!${NC}"
+            sleep 1
         fi
     else
         # Regular user program - run with default firmware
@@ -181,7 +235,7 @@ run_program() {
     fi
     
     echo ""
-    read -p "Press Enter to continue..."
+    press_enter
 }
 
 # Run all user programs
@@ -209,7 +263,7 @@ run_all() {
     fi
     
     echo ""
-    read -p "Press Enter to continue..."
+    press_enter
 }
 
 # List programs
@@ -241,7 +295,7 @@ list_programs() {
     fi
     
     echo ""
-    read -p "Press Enter to continue..."
+    press_enter
 }
 
 # Rebuild everything
@@ -254,6 +308,114 @@ rebuild() {
     sleep 1
 }
 
+# Show help
+show_help() {
+    cat << EOF
+${BLUE}RISC-V Emulator Runner${NC}
+Usage: $0 [OPTIONS]
+
+Options:
+  --run <program>     Run a specific user program
+  --run-with-fw <fw> <program>  Run a user program with specific firmware
+  --list              List all available programs
+  --rebuild           Rebuild everything (emulator + tests)
+  --clean             Clean all build files
+  --help              Show this help message
+  --non-interactive   Run in non-interactive mode (use with caution)
+
+If no options are provided, the interactive menu will be shown.
+
+Examples:
+  $0 --run hello
+  $0 --run-with-fw firmware_boot hello
+  $0 --list
+  $0 --rebuild
+EOF
+}
+
+# Parse command line arguments
+parse_args() {
+    # Check for non-interactive flag first
+    for arg in "$@"; do
+        if [ "$arg" = "--non-interactive" ]; then
+            INTERACTIVE_MODE=0
+            break
+        fi
+    done
+    
+    case "$1" in
+        --run)
+            if [ -z "$2" ]; then
+                echo -e "${RED}Error: --run requires a program name${NC}"
+                show_help
+                exit 1
+            fi
+            local program="bin/$2.bin"
+            if [ ! -f "$program" ]; then
+                echo -e "${RED}Error: Program '$2' not found${NC}"
+                echo -e "${YELLOW}Use --list to see available programs${NC}"
+                exit 1
+            fi
+            build_if_needed
+            echo -e "${BLUE}Running: $2${NC}"
+            "$EMULATOR" "$program"
+            exit 0
+            ;;
+        --run-with-fw)
+            if [ -z "$2" ] || [ -z "$3" ]; then
+                echo -e "${RED}Error: --run-with-fw requires firmware and program name${NC}"
+                show_help
+                exit 1
+            fi
+            local firmware="bin/$2.bin"
+            local program="bin/$3.bin"
+            if [ ! -f "$firmware" ]; then
+                echo -e "${RED}Error: Firmware '$2' not found${NC}"
+                exit 1
+            fi
+            if [ ! -f "$program" ]; then
+                echo -e "${RED}Error: Program '$3' not found${NC}"
+                exit 1
+            fi
+            build_if_needed
+            echo -e "${BLUE}Running: $3 with firmware $2${NC}"
+            "$EMULATOR" "$program"
+            exit 0
+            ;;
+        --list)
+            build_if_needed
+            list_programs
+            exit 0
+            ;;
+        --rebuild)
+            rebuild
+            exit 0
+            ;;
+        --clean)
+            make clean
+            echo -e "${GREEN}Cleaned!${NC}"
+            exit 0
+            ;;
+        --help)
+            show_help
+            exit 0
+            ;;
+        --non-interactive)
+            # Already handled, just continue
+            return 0
+            ;;
+        "")
+            # No arguments - run interactive menu
+            return 0
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $1${NC}"
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
 # Main loop
 main() {
     while true; do
@@ -264,5 +426,25 @@ main() {
     done
 }
 
-# Run main
-main
+# Script entry point
+# Parse command line arguments first
+parse_args "$@"
+
+# If we get here, no arguments were provided, so run interactive menu
+# Verify we're in an interactive terminal
+if [ $INTERACTIVE_MODE -eq 1 ] && [ ! -t 0 ]; then
+    echo -e "${YELLOW}Warning: Not running in an interactive terminal.${NC}"
+    echo -e "${YELLOW}Switching to non-interactive mode. Use --help for options.${NC}"
+    INTERACTIVE_MODE=0
+    echo -e "${BLUE}Available programs:${NC}"
+    list_programs
+    exit 0
+fi
+
+# Run main interactive menu only if in interactive mode
+if [ $INTERACTIVE_MODE -eq 1 ]; then
+    main
+else
+    echo -e "${YELLOW}Non-interactive mode. Use --run to execute programs.${NC}"
+    show_help
+fi

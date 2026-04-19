@@ -1,7 +1,7 @@
 .section .text
-.global _start
+.global main
 
-_start:
+main:
     li t0, 100
     li t1, 23
     

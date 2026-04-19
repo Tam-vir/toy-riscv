@@ -1,7 +1,7 @@
 .section .text
-.global _start
+.global main
 
-_start:
+main:
     # print "Enter weight: "
     la a0, inpmsg
     li a7, 4

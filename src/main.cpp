@@ -51,28 +51,24 @@ void restore_terminal()
 }
 
 // Simulate a button press by toggling GPIO pin 0
+// Simulate a button press - keep pressed until acknowledged
 void simulate_button_press(Bus &bus, RISCV &cpu)
 {
     // Read current GPIO port 0 state
     uint32_t current_state = bus.load(0x1000);
 
-    // Press button (set bit 0 to 1)
+    // Press button (set bit 0 to 1) and KEEP it pressed
     bus.store(0x1000, current_state | 1);
-
-    // Run cycles to let the interrupt trigger and handler execute
-    for (int i = 0; i < 100 && cpu.is_running(); i++)
+    
+    // Run cycles to let the program detect the button press
+    // and potentially clear the interrupt
+    for (int i = 0; i < 5000 && cpu.is_running(); i++)
     {
         cpu.step();
     }
 
-    // Release button (set bit 0 to 0)
+    // Release button after the program has had time to process it
     bus.store(0x1000, current_state & ~1);
-
-    // Run a few more cycles
-    for (int i = 0; i < 20 && cpu.is_running(); i++)
-    {
-        cpu.step();
-    }
 }
 
 int main(int argc, char *argv[])

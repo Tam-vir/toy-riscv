@@ -15,8 +15,11 @@ BOOTLOADER_BASE = 0x0000
 USER_PROGRAM_BASE = 0x2000
 
 # RISC-V architecture flags (include zicsr extension for CSR instructions)
-RISCV_ARCH = rv32im
+RISCV_ARCH = rv32im_zicsr
 RISCV_ABI = ilp32
+
+# Linker script
+LINKER_SCRIPT = $(INCLUDE_DIR)/linker.ld
 
 # Runtime C files inside include
 INCLUDE_C_SRCS = $(wildcard $(INCLUDE_DIR)/*.c)
@@ -25,10 +28,10 @@ INCLUDE_C_OBJS = $(patsubst $(INCLUDE_DIR)/%.c,$(BUILD_DIR)/include_%.o,$(INCLUD
 # Compiler and tools
 CXX = g++
 CXXFLAGS = -std=c++11 -I$(SRC_DIR) -I$(INCLUDE_DIR) -Wall -Wextra
-RISCV_CC = riscv64-unknown-elf-gcc
-RISCV_AS = riscv64-unknown-elf-as
-RISCV_LD = riscv64-unknown-elf-ld
-RISCV_OBJCOPY = riscv64-unknown-elf-objcopy
+RISCV_CC = riscv64-elf-gcc
+RISCV_AS = riscv64-elf-as
+RISCV_LD = riscv64-elf-ld
+RISCV_OBJCOPY = riscv64-elf-objcopy
 
 # Source files (only .cpp files that actually exist)
 SRCS = $(SRC_DIR)/main.cpp \
@@ -42,9 +45,11 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
 # Target
 TARGET = $(BIN_DIR)/rvemu
 
-# Startup file
-STARTUP_SRC = startup/crt0.s
-STARTUP_OBJ = $(BUILD_DIR)/crt0.o
+# Startup files for different program types
+STARTUP_C_SRC = startup/c/crt0.s
+STARTUP_ASM_SRC = startup/asm/crt0.s
+STARTUP_C_OBJ = $(BUILD_DIR)/crt0_c.o
+STARTUP_ASM_OBJ = $(BUILD_DIR)/crt0_asm.o
 
 # Find all assembly test files (user assembly)
 ASM_TESTS = $(wildcard $(USER_ASM_DIR)/*.s)
@@ -78,6 +83,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 tests: $(ALL_BINS)
 
 # Build bootloader programs (start at 0x0000) with zicsr extension
+# Bootloader uses simple -Ttext approach
 $(BIN_DIR)/bootloader_%.bin: $(BOOTLOADER_DIR)/%.s
 	@echo "Building bootloader: $* (base address: $(BOOTLOADER_BASE))"
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
@@ -85,12 +91,24 @@ $(BIN_DIR)/bootloader_%.bin: $(BOOTLOADER_DIR)/%.s
 	$(RISCV_LD) -m elf32lriscv -Ttext=$(BOOTLOADER_BASE) -o $(BUILD_DIR)/bootloader_$*.elf $(BUILD_DIR)/bootloader_$*.o
 	$(RISCV_OBJCOPY) -O binary $(BUILD_DIR)/bootloader_$*.elf $@
 
-# Build user assembly programs (start at 0x2000) with zicsr extension
-$(BIN_DIR)/%.bin: $(USER_ASM_DIR)/%.s
-	@echo "Building user assembly: $* (base address: $(USER_PROGRAM_BASE))"
+# Build user assembly programs with assembly-specific startup file and linker script
+$(BIN_DIR)/%.bin: $(USER_ASM_DIR)/%.s $(STARTUP_ASM_SRC) $(LINKER_SCRIPT)
+	@echo "Building user assembly: $* (using startup/asm/crt0.s and linker script)"
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
+	
+	# Assemble the user assembly program
 	$(RISCV_AS) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -o $(BUILD_DIR)/$*.o $<
-	$(RISCV_LD) -m elf32lriscv -Ttext=$(USER_PROGRAM_BASE) -o $(BUILD_DIR)/$*.elf $(BUILD_DIR)/$*.o
+	
+	# Assemble the assembly-specific crt0 startup code
+	$(RISCV_AS) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -o $(BUILD_DIR)/crt0_asm_$*.o $(STARTUP_ASM_SRC)
+	
+	# Link with startup code and linker script
+	$(RISCV_LD) -m elf32lriscv -T $(LINKER_SCRIPT) \
+		-o $(BUILD_DIR)/$*.elf \
+		$(BUILD_DIR)/crt0_asm_$*.o \
+		$(BUILD_DIR)/$*.o
+	
+	# Convert to binary
 	$(RISCV_OBJCOPY) -O binary $(BUILD_DIR)/$*.elf $@
 
 # Compile include/*.c runtime files
@@ -99,24 +117,24 @@ $(BUILD_DIR)/include_%.o: $(INCLUDE_DIR)/%.c
 	$(RISCV_CC) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -nostdlib -ffreestanding \
 		-I$(INCLUDE_DIR) -c -o $@ $<
 
-# Build user C programs with startup (start at 0x2000)
-# NOTE: bootloader is NOT linked here to avoid duplicate _start symbol
-$(BIN_DIR)/%.bin: $(USER_C_DIR)/%.c $(STARTUP_SRC) $(INCLUDE_C_OBJS)
-	@echo "Building user C program: $* (base address: $(USER_PROGRAM_BASE))"
+# Build user C programs with C-specific startup file and linker script
+$(BIN_DIR)/%.bin: $(USER_C_DIR)/%.c $(STARTUP_C_SRC) $(INCLUDE_C_OBJS) $(LINKER_SCRIPT)
+	@echo "Building user C program: $* (using startup/c/crt0.s and linker script)"
 	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
 
 	# Compile the C file
 	$(RISCV_CC) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) -nostdlib -ffreestanding \
+		-mcmodel=medany -fno-common \
 		-I$(INCLUDE_DIR) -c -o $(BUILD_DIR)/$*.c.o $<
 
-	# Assemble the crt0 startup code
+	# Assemble the C-specific crt0 startup code
 	$(RISCV_AS) -march=$(RISCV_ARCH) -mabi=$(RISCV_ABI) \
-		-o $(BUILD_DIR)/crt0.o $(STARTUP_SRC)
+		-o $(BUILD_DIR)/crt0_c.o $(STARTUP_C_SRC)
 
-	# Link everything together (bootloader is NOT included here)
-	$(RISCV_LD) -m elf32lriscv -Ttext=$(USER_PROGRAM_BASE) \
+	# Link everything together using linker script
+	$(RISCV_LD) -m elf32lriscv -T $(LINKER_SCRIPT) \
 		-o $(BUILD_DIR)/$*.elf \
-		$(BUILD_DIR)/crt0.o \
+		$(BUILD_DIR)/crt0_c.o \
 		$(INCLUDE_C_OBJS) \
 		$(BUILD_DIR)/$*.c.o
 
@@ -337,6 +355,11 @@ help:
 	@echo "  User space:  0x2000 - ..."
 	@echo ""
 	@echo "RISC-V extensions enabled: $(RISCV_ARCH)"
+	@echo "Linker script: $(LINKER_SCRIPT)"
+	@echo ""
+	@echo "Startup files:"
+	@echo "  C programs:       $(STARTUP_C_SRC)"
+	@echo "  Assembly programs: $(STARTUP_ASM_SRC)"
 
 # Quick test
 .PHONY: test

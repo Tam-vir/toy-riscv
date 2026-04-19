@@ -668,7 +668,8 @@ void RISCV::exec(uint32_t instr)
         extra_cycles = 1; // FENCE has small penalty
         break;
 
-    // SYSTEM
+        // SYSTEM
+        // SYSTEM
     case 0x73:
     {
         uint32_t imm12 = instr >> 20;
@@ -678,13 +679,41 @@ void RISCV::exec(uint32_t instr)
         {
             if (imm12 == 0x0)
             {
+                // ECALL
                 if (env)
                     env->on_trap(*this, 11);
             }
             else if (imm12 == 0x1)
             {
+                // EBREAK
                 if (env)
                     env->on_trap(*this, 3);
+            }
+            else if (imm12 == 0x105) // WFI instruction (0x105)
+            {
+
+                bool has_pending_interrupts = false;
+
+                // Check if interrupts are globally enabled
+                if (mstatus & (1 << 3)) // MIE bit
+                {
+                    // Check for pending external interrupts from Bus
+                    if (bus)
+                    {
+                        uint32_t bus_interrupts = bus->get_interrupt_status() & bus->get_interrupt_enable();
+                        if (bus_interrupts != 0)
+                        {
+                            has_pending_interrupts = true;
+                        }
+                    }
+                }
+
+                if (!has_pending_interrupts)
+                {
+                    pc -= 4; // Don't advance PC - we'll execute WFI again next cycle
+
+                }
+                // else: interrupts pending - continue to next instruction
             }
             else if (imm12 == 0x302) // MRET
             {
@@ -702,6 +731,7 @@ void RISCV::exec(uint32_t instr)
         }
         else
         {
+            // CSR operations...
             uint32_t csr_addr = (instr >> 20) & 0xFFF;
             uint32_t csr_val = read_csr(csr_addr);
 
@@ -731,7 +761,6 @@ void RISCV::exec(uint32_t instr)
         }
         break;
     }
-
     default:
         throw std::runtime_error(std::string("Unknown opcode: 0x") +
                                  std::to_string(opcode) + " at PC=0x" +
